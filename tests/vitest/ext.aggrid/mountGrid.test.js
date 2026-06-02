@@ -30,7 +30,10 @@ describe( 'parseConfig', () => {
 
 describe( 'mountGrid', () => {
 	beforeEach( () => {
-		global.agGrid = { createGrid: vi.fn() };
+		global.agGrid = {
+			createGrid: vi.fn(),
+			themeQuartz: { withParams: () => ( { __wiki: true } ) }
+		};
 	} );
 
 	afterEach( () => {
@@ -56,5 +59,19 @@ describe( 'mountGrid', () => {
 		mountGrid( el );
 		expect( global.agGrid.createGrid ).not.toHaveBeenCalled();
 		expect( el.classList.contains( 'ext-aggrid--init' ) ).toBe( false );
+	} );
+
+	it( 'applies the wiki theme when the config has none', () => {
+		const el = makeEl( '{"columnDefs":[],"rowData":[]}' );
+		mountGrid( el );
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		expect( opts.theme ).toEqual( { __wiki: true } );
+	} );
+
+	it( 'preserves a theme already set in the config', () => {
+		const el = makeEl( '{"columnDefs":[],"rowData":[],"theme":"legacy"}' );
+		mountGrid( el );
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		expect( opts.theme ).toBe( 'legacy' );
 	} );
 } );

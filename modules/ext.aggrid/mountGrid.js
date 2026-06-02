@@ -1,5 +1,7 @@
 /* global agGrid */
 
+const { getWikiTheme } = require( './theme.js' );
+
 const PLACEHOLDER_SELECTOR = '.ext-aggrid';
 const CONFIG_ATTR = 'data-mw-aggrid-options';
 // Marks a placeholder as already mounted so re-runs (e.g. wikipage.content
@@ -37,6 +39,10 @@ function mountGrid( el ) {
 	const gridOptions = parseConfig( el );
 	if ( !gridOptions ) {
 		return;
+	}
+	// Apply the wiki theme unless the author already chose one.
+	if ( !gridOptions.theme ) {
+		gridOptions.theme = getWikiTheme();
 	}
 	// Mark before mounting so a concurrent/re-entrant pass can't double-mount.
 	el.classList.add( INIT_CLASS );

@@ -34,7 +34,8 @@
 		"ext.aggrid": {
 			"packageFiles": [
 				"ext.aggrid/init.js",
-				"ext.aggrid/mountGrid.js"
+				"ext.aggrid/mountGrid.js",
+				"ext.aggrid/theme.js"
 			],
 			"styles": [
 				"ext.aggrid/ext.aggrid.less"
