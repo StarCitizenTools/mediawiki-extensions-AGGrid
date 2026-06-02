@@ -36,16 +36,14 @@ function loadAgGrid() {
 		const script = document.createElement( 'script' );
 		script.src = src;
 		script.onload = () => resolve();
-		script.onerror = () => reject( new Error( 'failed to load AG Grid bundle' ) );
+		script.onerror = () => {
+			loadPromise = null;
+			script.remove();
+			reject( new Error( 'failed to load AG Grid bundle' ) );
+		};
 		document.head.appendChild( script );
 	} );
 	return loadPromise;
-}
-
-function loadAndMount( el ) {
-	loadAgGrid()
-		.then( () => mountGrid( el ) )
-		.catch( ( e ) => mw.log.error( '[ext.aggrid] ' + e.message ) );
 }
 
 /**
@@ -61,8 +59,12 @@ function getObserver() {
 		observer = new IntersectionObserver( ( entries, obs ) => {
 			entries.forEach( ( entry ) => {
 				if ( entry.isIntersecting ) {
-					obs.unobserve( entry.target );
-					loadAndMount( entry.target );
+					loadAgGrid()
+						.then( () => {
+							obs.unobserve( entry.target );
+							mountGrid( entry.target );
+						} )
+						.catch( ( e ) => mw.log.error( '[ext.aggrid] ' + e.message ) );
 				}
 			} );
 		}, { rootMargin: ROOT_MARGIN } );

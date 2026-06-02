@@ -1,5 +1,5 @@
 describe( 'lazyMount', () => {
-	let observed, intersectCb, lazyMount;
+	let observed, intersectCb, lazyMount, loadAgGrid;
 
 	beforeEach( async () => {
 		observed = [];
@@ -24,7 +24,7 @@ describe( 'lazyMount', () => {
 		// Reset modules so the singleton observer is recreated per test, ensuring
 		// the IntersectionObserver constructor (which captures intersectCb) runs fresh.
 		vi.resetModules();
-		( { lazyMount } = await import( '../../../modules/ext.aggrid/lazyMount.js?t=' + Date.now() ) );
+		( { lazyMount, loadAgGrid } = await import( '../../../modules/ext.aggrid/lazyMount.js?t=' + Date.now() ) );
 	} );
 
 	afterEach( () => {
@@ -77,5 +77,29 @@ describe( 'lazyMount', () => {
 			setTimeout( r, 0 );
 		} );
 		expect( global.agGrid.createGrid ).toHaveBeenCalledTimes( 2 );
+	} );
+
+	it( 'resets the memo after a failed load so a second call retries with a new script', async () => {
+		// Remove the pre-loaded agGrid so loadAgGrid() actually injects a <script>.
+		delete window.agGrid;
+		delete global.agGrid;
+
+		const appendSpy = vi.spyOn( document.head, 'appendChild' );
+
+		// First call — promise pending, <script> injected.
+		const firstPromise = loadAgGrid();
+		const firstScript = appendSpy.mock.calls[ 0 ][ 0 ];
+
+		// Simulate network error — onerror resets the memo.
+		firstScript.onerror();
+
+		// The first promise must reject.
+		await expect( firstPromise ).rejects.toThrow( 'failed to load AG Grid bundle' );
+
+		// Second call — memo was reset, so a brand-new <script> should be injected.
+		loadAgGrid();
+		expect( appendSpy ).toHaveBeenCalledTimes( 2 );
+
+		appendSpy.mockRestore();
 	} );
 } );
