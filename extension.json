@@ -22,6 +22,9 @@
 	"AutoloadNamespaces": {
 		"MediaWiki\\Extension\\AGGrid\\": "includes/"
 	},
+	"ServiceWiringFiles": [
+		"includes/ServiceWiring.php"
+	],
 	"Hooks": {
 		"ScribuntoExternalLibraries": "scribunto"
 	},

@@ -4,16 +4,19 @@ declare( strict_types=1 );
 
 namespace MediaWiki\Extension\AGGrid\Tests\Integration;
 
-use MediaWiki\Extension\AGGrid\GridHtmlBuilder;
 use MediaWikiIntegrationTestCase;
 
 /**
- * @covers \MediaWiki\Extension\AGGrid\GridHtmlBuilder
+ * @covers \MediaWiki\Extension\AGGrid\Service\GridRenderer
  */
-class GridHtmlBuilderTest extends MediaWikiIntegrationTestCase {
+class GridRendererTest extends MediaWikiIntegrationTestCase {
 
-	public function testBuildCarriesConfigInDataAttribute(): void {
-		$html = GridHtmlBuilder::build( [
+	private function getRenderer(): \MediaWiki\Extension\AGGrid\Service\GridRenderer {
+		return $this->getServiceContainer()->getService( 'AGGrid.GridRenderer' );
+	}
+
+	public function testRenderCarriesConfigInDataAttribute(): void {
+		$html = $this->getRenderer()->render( [
 			'columnDefs' => [ [ 'field' => 'name' ] ],
 			'rowData' => [ [ 'name' => 'Aurora' ] ],
 		] );
@@ -30,8 +33,8 @@ class GridHtmlBuilderTest extends MediaWikiIntegrationTestCase {
 	 * Lua tables reach PHP as 1-indexed arrays. They must serialize as JSON
 	 * arrays (which AG Grid requires for columnDefs/rowData), not JSON objects.
 	 */
-	public function testBuildEncodesLuaSequencesAsJsonArrays(): void {
-		$html = GridHtmlBuilder::build( [
+	public function testRenderEncodesLuaSequencesAsJsonArrays(): void {
+		$html = $this->getRenderer()->render( [
 			'columnDefs' => [ 1 => [ 'field' => 'name' ], 2 => [ 'field' => 'price' ] ],
 			'rowData' => [ 1 => [ 'name' => 'Aurora', 'price' => 25 ] ],
 		] );
@@ -47,8 +50,8 @@ class GridHtmlBuilderTest extends MediaWikiIntegrationTestCase {
 		$this->assertSame( 'Aurora', $decoded['rowData'][0]['name'] );
 	}
 
-	public function testBuildIncludesLoadingSkeleton(): void {
-		$html = GridHtmlBuilder::build( [
+	public function testRenderIncludesLoadingSkeleton(): void {
+		$html = $this->getRenderer()->render( [
 			'columnDefs' => [ [ 'field' => 'name' ] ],
 			'rowData' => [],
 		] );
@@ -57,6 +60,7 @@ class GridHtmlBuilderTest extends MediaWikiIntegrationTestCase {
 		$this->assertStringContainsString( 'ext-aggrid__skeleton', $html );
 		$this->assertStringContainsString( 'aria-hidden="true"', $html );
 		$this->assertStringContainsString( 'ext-aggrid__skeleton-header', $html );
-		$this->assertSame( 6, substr_count( $html, 'ext-aggrid__skeleton-row' ) );
+		$this->assertStringContainsString( 'ext-aggrid__skeleton-content', $html );
+		$this->assertStringContainsString( 'ext-aggrid__skeleton-footer', $html );
 	}
 }
