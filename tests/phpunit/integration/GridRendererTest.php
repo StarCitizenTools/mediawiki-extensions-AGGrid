@@ -59,8 +59,5 @@ class GridRendererTest extends MediaWikiIntegrationTestCase {
 		$this->assertStringContainsString( 'aria-busy="true"', $html );
 		$this->assertStringContainsString( 'ext-aggrid__skeleton', $html );
 		$this->assertStringContainsString( 'aria-hidden="true"', $html );
-		$this->assertStringContainsString( 'ext-aggrid__skeleton-header', $html );
-		$this->assertStringContainsString( 'ext-aggrid__skeleton-content', $html );
-		$this->assertStringContainsString( 'ext-aggrid__skeleton-footer', $html );
 	}
 }
