@@ -2,3 +2,48 @@
 	width: 100%;
 	height: 400px;
 }
+
+.ext-aggrid__skeleton {
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	height: 100%;
+	padding: 8px;
+}
+
+.ext-aggrid__skeleton-header,
+.ext-aggrid__skeleton-row {
+	background-color: var( --background-color-interactive-subtle, #f8f9fa );
+	border-radius: 2px;
+}
+
+.ext-aggrid__skeleton-header {
+	height: 40px;
+}
+
+.ext-aggrid__skeleton-row {
+	height: 32px;
+}
+
+// Shimmer only when the user hasn't asked to reduce motion. Colours come from
+// Codex tokens so the skeleton matches light/dark.
+@media ( prefers-reduced-motion: no-preference ) {
+	.ext-aggrid__skeleton-header,
+	.ext-aggrid__skeleton-row {
+		background-image: linear-gradient( 90deg, transparent 0%, var( --background-color-neutral-subtle, #eaecf0 ) 50%, transparent 100% );
+		background-repeat: no-repeat;
+		background-size: 200% 100%;
+		animation: ext-aggrid-shimmer 1.5s ease-in-out infinite;
+	}
+
+	@keyframes ext-aggrid-shimmer {
+		from {
+			background-position: 200% 0;
+		}
+
+		to {
+			background-position: -200% 0;
+		}
+	}
+}

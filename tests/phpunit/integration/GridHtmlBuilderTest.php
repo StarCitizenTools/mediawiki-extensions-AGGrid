@@ -46,4 +46,17 @@ class GridHtmlBuilderTest extends MediaWikiIntegrationTestCase {
 		$this->assertArrayHasKey( 0, $decoded['rowData'], 'rowData must be a 0-indexed list' );
 		$this->assertSame( 'Aurora', $decoded['rowData'][0]['name'] );
 	}
+
+	public function testBuildIncludesLoadingSkeleton(): void {
+		$html = GridHtmlBuilder::build( [
+			'columnDefs' => [ [ 'field' => 'name' ] ],
+			'rowData' => [],
+		] );
+
+		$this->assertStringContainsString( 'aria-busy="true"', $html );
+		$this->assertStringContainsString( 'ext-aggrid__skeleton', $html );
+		$this->assertStringContainsString( 'aria-hidden="true"', $html );
+		$this->assertStringContainsString( 'ext-aggrid__skeleton-header', $html );
+		$this->assertSame( 6, substr_count( $html, 'ext-aggrid__skeleton-row' ) );
+	}
 }

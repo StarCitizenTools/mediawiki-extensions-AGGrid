@@ -15,16 +15,36 @@ use MediaWiki\Html\Html;
  */
 final class GridHtmlBuilder {
 
+	private const SKELETON_ROWS = 6;
+
 	public static function build( array $gridOptions ): string {
 		$json = json_encode(
 			self::normalizeSequences( $gridOptions ),
 			JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
 		);
 
-		return Html::element( 'div', [
+		return Html::rawElement( 'div', [
 			'class' => 'ext-aggrid',
 			'data-mw-aggrid-options' => $json,
-		] );
+			'aria-busy' => 'true',
+		], self::buildSkeleton() );
+	}
+
+	/**
+	 * Decorative loading skeleton shown until the grid mounts client-side.
+	 * aria-hidden because it carries no real content.
+	 */
+	private static function buildSkeleton(): string {
+		$rows = '';
+		for ( $i = 0; $i < self::SKELETON_ROWS; $i++ ) {
+			$rows .= Html::element( 'div', [ 'class' => 'ext-aggrid__skeleton-row' ] );
+		}
+
+		return Html::rawElement(
+			'div',
+			[ 'class' => 'ext-aggrid__skeleton', 'aria-hidden' => 'true' ],
+			Html::element( 'div', [ 'class' => 'ext-aggrid__skeleton-header' ] ) . $rows
+		);
 	}
 
 	/**
