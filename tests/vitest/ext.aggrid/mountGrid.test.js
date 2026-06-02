@@ -74,4 +74,18 @@ describe( 'mountGrid', () => {
 		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
 		expect( opts.theme ).toBe( 'legacy' );
 	} );
+
+	it( 'removes the skeleton and clears aria-busy on mount', () => {
+		const el = makeEl( '{"columnDefs":[],"rowData":[]}' );
+		el.setAttribute( 'aria-busy', 'true' );
+		const skeleton = document.createElement( 'div' );
+		skeleton.className = 'ext-aggrid__skeleton';
+		el.appendChild( skeleton );
+
+		mountGrid( el );
+
+		expect( el.querySelector( '.ext-aggrid__skeleton' ) ).toBeNull();
+		expect( el.hasAttribute( 'aria-busy' ) ).toBe( false );
+		expect( global.agGrid.createGrid ).toHaveBeenCalledTimes( 1 );
+	} );
 } );

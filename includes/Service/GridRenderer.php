@@ -2,29 +2,38 @@
 
 declare( strict_types=1 );
 
-namespace MediaWiki\Extension\AGGrid;
+namespace MediaWiki\Extension\AGGrid\Service;
 
-use MediaWiki\Html\Html;
+use MediaWiki\Html\TemplateParser;
 
 /**
- * Builds the client-side placeholder for an AG Grid instance.
+ * Renders the client-side placeholder for an AG Grid instance via Mustache template.
  *
- * The grid configuration (an AG Grid gridOptions object) is carried in a
- * `data-mw-aggrid-options` attribute on the placeholder. The client module
- * reads the attribute, JSON-parses it, and calls agGrid.createGrid() on the div.
+ * The grid configuration (an AG Grid gridOptions object) is JSON-encoded and
+ * passed into the template as the `options` variable. The client module reads
+ * the resulting `data-mw-aggrid-options` attribute, parses it, and calls
+ * agGrid.createGrid() on the rendered div.
  */
-final class GridHtmlBuilder {
+final class GridRenderer {
 
-	public static function build( array $gridOptions ): string {
+	public function __construct(
+		private readonly TemplateParser $templateParser
+	) {
+	}
+
+	/**
+	 * Render the AG Grid placeholder HTML for the given grid options.
+	 *
+	 * @param array $gridOptions AG Grid gridOptions array.
+	 * @return string HTML placeholder.
+	 */
+	public function render( array $gridOptions ): string {
 		$json = json_encode(
 			self::normalizeSequences( $gridOptions ),
 			JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
 		);
 
-		return Html::element( 'div', [
-			'class' => 'ext-aggrid',
-			'data-mw-aggrid-options' => $json,
-		] );
+		return $this->templateParser->processTemplate( 'grid', [ 'options' => $json ] );
 	}
 
 	/**

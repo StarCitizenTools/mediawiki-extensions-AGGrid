@@ -4,9 +4,9 @@ declare( strict_types=1 );
 
 namespace MediaWiki\Extension\AGGrid\Scribunto;
 
-use MediaWiki\Extension\AGGrid\GridHtmlBuilder;
 use MediaWiki\Extension\Scribunto\Engines\LuaCommon\LibraryBase;
 use MediaWiki\Extension\Scribunto\Engines\LuaCommon\LuaError;
+use MediaWiki\MediaWikiServices;
 
 class LuaLibrary extends LibraryBase {
 
@@ -45,7 +45,7 @@ class LuaLibrary extends LibraryBase {
 		$parser = $this->getParser();
 		$parser->getOutput()->addModules( [ 'ext.aggrid' ] );
 
-		$html = GridHtmlBuilder::build( $gridOptions );
+		$html = MediaWikiServices::getInstance()->getService( 'AGGrid.GridRenderer' )->render( $gridOptions );
 
 		// Strip marker keeps the parser from reprocessing the raw HTML.
 		return [ $parser->insertStripItem( $html ) ];

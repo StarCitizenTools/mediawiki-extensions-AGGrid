@@ -22,6 +22,9 @@
 	"AutoloadNamespaces": {
 		"MediaWiki\\Extension\\AGGrid\\": "includes/"
 	},
+	"ServiceWiringFiles": [
+		"includes/ServiceWiring.php"
+	],
 	"Hooks": {
 		"ScribuntoExternalLibraries": "scribunto"
 	},
@@ -35,7 +38,8 @@
 			"packageFiles": [
 				"ext.aggrid/init.js",
 				"ext.aggrid/mountGrid.js",
-				"ext.aggrid/theme.js"
+				"ext.aggrid/theme.js",
+				"ext.aggrid/lazyMount.js"
 			],
 			"styles": [
 				"ext.aggrid/ext.aggrid.less"

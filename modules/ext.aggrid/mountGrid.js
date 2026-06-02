@@ -46,6 +46,13 @@ function mountGrid( el ) {
 	}
 	// Mark before mounting so a concurrent/re-entrant pass can't double-mount.
 	el.classList.add( INIT_CLASS );
+	// Drop the server-rendered loading skeleton and busy state; AG Grid expects
+	// an empty container.
+	const skeleton = el.querySelector( '.ext-aggrid__skeleton' );
+	if ( skeleton ) {
+		skeleton.remove();
+	}
+	el.removeAttribute( 'aria-busy' );
 	// agGrid is the global exposed by the vendored AG Grid bundle.
 	agGrid.createGrid( el, gridOptions );
 }
