@@ -9,6 +9,7 @@ const AG_GRID_VERSION = '35.3.0';
 const ROOT_MARGIN = '200px';
 
 let loadPromise = null;
+let observer = null;
 
 /**
  * Load the AG Grid bundle from its static asset URL, once. Memoised so
@@ -16,6 +17,8 @@ let loadPromise = null;
  *
  * Loaded statically (not via ResourceLoader) because wikimedia/minify <= 2.10.0
  * corrupts AG Grid's ES2020 BigInt literals when minifying it.
+ * Once a MediaWiki release ships a BigInt-aware minifier, this can become a
+ * normal ResourceLoader `scripts` module.
  *
  * @return {Promise}
  */
@@ -46,6 +49,28 @@ function loadAndMount( el ) {
 }
 
 /**
+ * Return the module-level singleton IntersectionObserver, creating it on first
+ * call. Re-using the same observer across lazyMount() calls means old observers
+ * are never left holding references to detached nodes (e.g. after a VisualEditor
+ * save or live-preview re-render).
+ *
+ * @return {IntersectionObserver}
+ */
+function getObserver() {
+	if ( !observer ) {
+		observer = new IntersectionObserver( ( entries, obs ) => {
+			entries.forEach( ( entry ) => {
+				if ( entry.isIntersecting ) {
+					obs.unobserve( entry.target );
+					loadAndMount( entry.target );
+				}
+			} );
+		}, { rootMargin: ROOT_MARGIN } );
+	}
+	return observer;
+}
+
+/**
  * Lazily mount every AG Grid placeholder within a root: load the bundle and
  * mount each grid as it nears the viewport. Falls back to eager mounting where
  * IntersectionObserver is unavailable.
@@ -62,21 +87,12 @@ function lazyMount( root ) {
 		return;
 	}
 
-	// eslint-disable-next-line compat/compat
-	const observer = new IntersectionObserver( ( entries, obs ) => {
-		entries.forEach( ( entry ) => {
-			if ( entry.isIntersecting ) {
-				obs.unobserve( entry.target );
-				loadAndMount( entry.target );
-			}
-		} );
-	}, { rootMargin: ROOT_MARGIN } );
-
+	const obs = getObserver();
 	Array.prototype.forEach.call(
 		scope.querySelectorAll( PLACEHOLDER_SELECTOR ),
 		( el ) => {
 			if ( !el.classList.contains( INIT_CLASS ) ) {
-				observer.observe( el );
+				obs.observe( el );
 			}
 		}
 	);

@@ -1,9 +1,7 @@
-const { lazyMount } = require( '../../../modules/ext.aggrid/lazyMount.js' );
-
 describe( 'lazyMount', () => {
-	let observed, intersectCb;
+	let observed, intersectCb, lazyMount;
 
-	beforeEach( () => {
+	beforeEach( async () => {
 		observed = [];
 		intersectCb = null;
 		global.agGrid = { createGrid: vi.fn(), themeQuartz: { withParams: () => ( {} ) } };
@@ -23,6 +21,10 @@ describe( 'lazyMount', () => {
 
 			disconnect() {}
 		};
+		// Reset modules so the singleton observer is recreated per test, ensuring
+		// the IntersectionObserver constructor (which captures intersectCb) runs fresh.
+		vi.resetModules();
+		( { lazyMount } = await import( '../../../modules/ext.aggrid/lazyMount.js?t=' + Date.now() ) );
 	} );
 
 	afterEach( () => {
