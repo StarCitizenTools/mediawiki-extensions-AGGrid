@@ -1,0 +1,17 @@
+ag-grid-community:
+  license: MIT
+  homepage: https://www.ag-grid.com
+  authors: AG Grid Ltd.
+  version: 35.3.0
+  type: tar
+  src: https://registry.npmjs.org/ag-grid-community/-/ag-grid-community-35.3.0.tgz
+  integrity: sha512-c9WQWB88J965IjBC/GPUX30aAZix10o6oYT86DWipcxgLZTIQlLSilJJEr1bno/245rPEAIMjhoU1gp9VIfURg==
+
+  dest:
+    # The minified UMD build (global `agGrid`). It is loaded from its static
+    # asset URL, NOT through load.php, because wikimedia/minify <= 2.10.0 mangles
+    # AG Grid's BigInt literals (0n -> "0 n"). BigInt support exists on the
+    # minify master branch but is unreleased; once a MediaWiki ships it, this can
+    # become a normal ResourceLoader `scripts` module again.
+    package/dist/ag-grid-community.min.js:
+    package/LICENSE.txt:

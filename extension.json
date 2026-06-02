@@ -1,0 +1,50 @@
+{
+	"name": "AGGrid",
+	"version": "0.1.0",
+	"author": [
+		"alistair3149"
+	],
+	"url": "https://www.mediawiki.org/wiki/Extension:AGGrid",
+	"descriptionmsg": "aggrid-desc",
+	"type": "other",
+	"license-name": "GPL-3.0-or-later",
+	"requires": {
+		"MediaWiki": ">= 1.43.0",
+		"extensions": {
+			"Scribunto": "*"
+		}
+	},
+	"MessagesDirs": {
+		"AGGrid": [
+			"i18n"
+		]
+	},
+	"AutoloadNamespaces": {
+		"MediaWiki\\Extension\\AGGrid\\": "includes/"
+	},
+	"Hooks": {
+		"ScribuntoExternalLibraries": "scribunto"
+	},
+	"HookHandlers": {
+		"scribunto": {
+			"class": "MediaWiki\\Extension\\AGGrid\\Hooks"
+		}
+	},
+	"ResourceModules": {
+		"ext.aggrid": {
+			"packageFiles": [
+				"ext.aggrid/init.js",
+				"ext.aggrid/mountGrid.js"
+			],
+			"styles": [
+				"ext.aggrid/ext.aggrid.less"
+			]
+		}
+	},
+	"ForeignResourcesDir": "modules/lib",
+	"ResourceFileModulePaths": {
+		"localBasePath": "modules",
+		"remoteExtPath": "AGGrid/modules"
+	},
+	"manifest_version": 2
+}

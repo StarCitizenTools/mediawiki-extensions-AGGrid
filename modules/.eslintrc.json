@@ -1,0 +1,21 @@
+{
+	"extends": [
+		"wikimedia/client",
+		"wikimedia/mediawiki"
+	],
+	"env": {
+		"browser": true
+	},
+	"globals": {
+		"exports": true
+	},
+	"parserOptions": {
+		"ecmaVersion": 11,
+		"sourceType": "module"
+	},
+	"rules": {
+		"es-x/no-nullish-coalescing-operators": "off",
+		"jsdoc/no-undefined-types": "off",
+		"max-len": "off"
+	}
+}
