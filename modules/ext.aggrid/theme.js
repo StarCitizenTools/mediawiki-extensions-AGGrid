@@ -18,8 +18,8 @@ const THEME_PARAMS = {
 	selectedRowBackgroundColor: 'var(--background-color-progressive-subtle, #f1f4fd)',
 	fontFamily: 'inherit',
 	// Inherit the page color-scheme rather than AG Grid's default of "light", so
-	// the wrapper doesn't pin itself to light and Citizen's light-dark() Codex
-	// tokens resolve to the wiki's current mode inside the grid.
+	// the wrapper doesn't pin itself to light and light-dark() color tokens
+	// resolve to the page's current mode inside the grid.
 	browserColorScheme: 'inherit'
 };
 
