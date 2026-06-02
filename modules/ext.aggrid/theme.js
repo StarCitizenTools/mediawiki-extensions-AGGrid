@@ -16,7 +16,11 @@ const THEME_PARAMS = {
 	accentColor: 'var(--color-progressive, #36c)',
 	rowHoverColor: 'var(--background-color-interactive-subtle, #f8f9fa)',
 	selectedRowBackgroundColor: 'var(--background-color-progressive-subtle, #f1f4fd)',
-	fontFamily: 'inherit'
+	fontFamily: 'inherit',
+	// Inherit the page color-scheme rather than AG Grid's default of "light", so
+	// the wrapper doesn't pin itself to light and Citizen's light-dark() Codex
+	// tokens resolve to the wiki's current mode inside the grid.
+	browserColorScheme: 'inherit'
 };
 
 let cachedTheme = null;

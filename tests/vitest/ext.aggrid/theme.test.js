@@ -23,6 +23,10 @@ describe( 'THEME_PARAMS', () => {
 		expect( THEME_PARAMS.fontFamily ).toBe( 'inherit' );
 		expect( THEME_PARAMS.fontSize ).toBeUndefined();
 	} );
+
+	it( 'inherits the browser color-scheme so light-dark() tokens resolve', () => {
+		expect( THEME_PARAMS.browserColorScheme ).toBe( 'inherit' );
+	} );
 } );
 
 describe( 'getWikiTheme', () => {
