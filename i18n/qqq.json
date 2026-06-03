@@ -4,5 +4,6 @@
 			"alistair3149"
 		]
 	},
-	"aggrid-desc": "{{desc|name=AGGrid|url=https://www.mediawiki.org/wiki/Extension:AGGrid}}"
+	"aggrid-desc": "{{desc|name=AGGrid|url=https://www.mediawiki.org/wiki/Extension:AGGrid}}",
+	"aggrid-error-load": "Error message shown inside an AG Grid (as its overlay) when the grid's row data fails to load from the server."
 }

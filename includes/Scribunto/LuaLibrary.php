@@ -10,6 +10,8 @@ use MediaWiki\MediaWikiServices;
 
 class LuaLibrary extends LibraryBase {
 
+	private const MAX_ROWS = 5000;
+
 	/**
 	 * @inheritDoc
 	 */
@@ -41,11 +43,34 @@ class LuaLibrary extends LibraryBase {
 		if ( !isset( $gridOptions['rowData'] ) || !is_array( $gridOptions['rowData'] ) ) {
 			throw new LuaError( 'mw.ext.aggrid.render: "rowData" must be a table' );
 		}
+		$rowCount = count( $gridOptions['rowData'] );
+		if ( $rowCount > self::MAX_ROWS ) {
+			throw new LuaError(
+				"mw.ext.aggrid.render: too many rows ($rowCount); the inline limit is " .
+				self::MAX_ROWS . '. Use a structured data backend such as Bucket or Cargo ' .
+				'for larger datasets.'
+			);
+		}
 
 		$parser = $this->getParser();
-		$parser->getOutput()->addModules( [ 'ext.aggrid' ] );
+		$parserOutput = $parser->getOutput();
+		$parserOutput->addModules( [ 'ext.aggrid' ] );
+		// Load the placeholder/skeleton styles render-blocking (in <head>) so the
+		// grid's space is reserved at first paint — avoids layout shift (CLS) from
+		// the async JS module's styles arriving late.
+		$parserOutput->addModuleStyles( [ 'ext.aggrid.styles' ] );
 
-		$html = MediaWikiServices::getInstance()->getService( 'AGGrid.GridRenderer' )->render( $gridOptions );
+		$title = $parser->getTitle();
+		$pageId = $title->getArticleID();
+		// Canonical parses carry a revision id; the getLatestRevID() fallback only
+		// matters for API parses without an oldid. A 0/missing id becomes null
+		// below, routing to the inline-embed branch.
+		$revId = $parser->getRevisionId() ?: $title->getLatestRevID();
+		$isPreview = $parser->getOptions()->getIsPreview();
+
+		$html = MediaWikiServices::getInstance()
+			->getService( 'AGGrid.GridRenderer' )
+			->render( $gridOptions, $parserOutput, $pageId ?: null, $revId ?: null, $isPreview );
 
 		// Strip marker keeps the parser from reprocessing the raw HTML.
 		return [ $parser->insertStripItem( $html ) ];

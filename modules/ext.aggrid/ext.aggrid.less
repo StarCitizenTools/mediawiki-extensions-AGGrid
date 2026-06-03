@@ -22,24 +22,35 @@
 }
 
 .ext-aggrid__skeleton-content {
+	position: relative;
 	flex-grow: 1;
+	overflow: hidden;
+}
+
+.ext-aggrid__overlay-error {
+	padding: 8px 16px;
+	color: @color-error;
+	text-align: center;
 }
 
 @media ( prefers-reduced-motion: no-preference ) {
-	.ext-aggrid__skeleton-content {
+	// Sweep a gradient band across with a compositor-driven transform (GPU) rather
+	// than animating background-position, which repaints every frame and stutters.
+	.ext-aggrid__skeleton-content::after {
+		position: absolute;
+		inset: 0;
+		content: '';
 		background-image: linear-gradient( 90deg, transparent 0%, var( --background-color-neutral-subtle, #eaecf0 ) 50%, transparent 100% );
-		background-repeat: no-repeat;
-		background-size: 200% 100%;
 		animation: ext-aggrid-shimmer 1.5s ease-in-out infinite;
 	}
 
 	@keyframes ext-aggrid-shimmer {
 		from {
-			background-position: 200% 0;
+			transform: translateX( -100% );
 		}
 
 		to {
-			background-position: -200% 0;
+			transform: translateX( 100% );
 		}
 	}
 }
