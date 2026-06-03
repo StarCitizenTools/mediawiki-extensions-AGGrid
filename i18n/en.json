@@ -4,5 +4,6 @@
 			"alistair3149"
 		]
 	},
-	"aggrid-desc": "Renders AG Grid data grids"
+	"aggrid-desc": "Renders AG Grid data grids",
+	"aggrid-error-load": "Could not load the grid data."
 }

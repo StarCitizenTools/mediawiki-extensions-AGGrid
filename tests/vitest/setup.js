@@ -3,5 +3,9 @@ global.mw = global.mw || {
 	log: {
 		error: () => {},
 		warn: () => {}
+	},
+	msg: ( key ) => key,
+	html: {
+		escape: ( s ) => s
 	}
 };

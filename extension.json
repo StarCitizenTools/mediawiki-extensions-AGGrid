@@ -26,14 +26,46 @@
 		"includes/ServiceWiring.php"
 	],
 	"Hooks": {
-		"ScribuntoExternalLibraries": "scribunto"
+		"ScribuntoExternalLibraries": "scribunto",
+		"LoadExtensionSchemaUpdates": "schema",
+		"LinksUpdateComplete": "linksupdate",
+		"PageDeleteComplete": "pagedelete"
 	},
 	"HookHandlers": {
 		"scribunto": {
-			"class": "MediaWiki\\Extension\\AGGrid\\Hooks"
+			"class": "MediaWiki\\Extension\\AGGrid\\Hooks\\ScribuntoHandler"
+		},
+		"schema": {
+			"class": "MediaWiki\\Extension\\AGGrid\\Hooks\\SchemaHandler"
+		},
+		"linksupdate": {
+			"class": "MediaWiki\\Extension\\AGGrid\\Hooks\\LinksUpdateHandler",
+			"services": [ "AGGrid.InlineDataStore" ]
+		},
+		"pagedelete": {
+			"class": "MediaWiki\\Extension\\AGGrid\\Hooks\\PageDeleteHandler",
+			"services": [ "AGGrid.InlineDataStore" ]
 		}
 	},
+	"RestRoutes": [
+		{
+			"path": "/aggrid/v0/grid/{pageid}/{rev}/{index}/rows",
+			"method": "GET",
+			"class": "MediaWiki\\Extension\\AGGrid\\Rest\\GridRowsHandler",
+			"services": [
+				"AGGrid.InlineDataStore",
+				"PermissionManager",
+				"TitleFactory",
+				"UserFactory"
+			]
+		}
+	],
 	"ResourceModules": {
+		"ext.aggrid.styles": {
+			"styles": [
+				"ext.aggrid/ext.aggrid.less"
+			]
+		},
 		"ext.aggrid": {
 			"packageFiles": [
 				"ext.aggrid/init.js",
@@ -41,8 +73,11 @@
 				"ext.aggrid/theme.js",
 				"ext.aggrid/lazyMount.js"
 			],
-			"styles": [
-				"ext.aggrid/ext.aggrid.less"
+			"dependencies": [
+				"mediawiki.api"
+			],
+			"messages": [
+				"aggrid-error-load"
 			]
 		}
 	},

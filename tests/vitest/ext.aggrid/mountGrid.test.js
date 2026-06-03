@@ -88,4 +88,82 @@ describe( 'mountGrid', () => {
 		expect( el.hasAttribute( 'aria-busy' ) ).toBe( false );
 		expect( global.agGrid.createGrid ).toHaveBeenCalledTimes( 1 );
 	} );
+
+	function makeHandleEl( opts ) {
+		const el = document.createElement( 'div' );
+		el.className = 'ext-aggrid';
+		el.setAttribute( 'data-mw-aggrid-options', opts );
+		el.setAttribute( 'data-mw-aggrid-pageid', '7' );
+		el.setAttribute( 'data-mw-aggrid-rev', '42' );
+		el.setAttribute( 'data-mw-aggrid-index', '0' );
+		return el;
+	}
+
+	it( 'fetches rows over REST when the placeholder carries a handle', async () => {
+		const get = vi.fn().mockResolvedValue( { rows: [ { name: 'Aurora' } ] } );
+		const RestMock = vi.fn();
+		RestMock.prototype.get = get;
+		global.mw.Rest = RestMock;
+
+		const el = makeHandleEl( '{"columnDefs":[{"field":"name"}]}' );
+		mountGrid( el );
+
+		// Guard applied before the async fetch resolves.
+		expect( el.classList.contains( 'ext-aggrid--init' ) ).toBe( true );
+
+		await new Promise( ( r ) => {
+			setTimeout( r, 0 );
+		} );
+
+		expect( get ).toHaveBeenCalledWith( '/aggrid/v0/grid/7/42/0/rows' );
+		expect( global.agGrid.createGrid ).toHaveBeenCalledTimes( 1 );
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		expect( opts.rowData ).toEqual( [ { name: 'Aurora' } ] );
+
+		delete global.mw.Rest;
+	} );
+
+	it( 'mounts an error overlay when there is neither rowData nor a handle', () => {
+		const el = makeEl( '{"columnDefs":[{"field":"name"}]}' );
+		const skeleton = document.createElement( 'div' );
+		skeleton.className = 'ext-aggrid__skeleton';
+		el.appendChild( skeleton );
+		el.setAttribute( 'aria-busy', 'true' );
+
+		mountGrid( el );
+
+		expect( el.querySelector( '.ext-aggrid__skeleton' ) ).toBeNull();
+		expect( el.hasAttribute( 'aria-busy' ) ).toBe( false );
+		expect( global.agGrid.createGrid ).toHaveBeenCalledTimes( 1 );
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		expect( opts.rowData ).toEqual( [] );
+		expect( opts.overlayNoRowsTemplate ).toContain( 'aggrid-error-load' );
+	} );
+
+	it( 'mounts an error overlay when the row fetch fails', async () => {
+		const get = vi.fn().mockRejectedValue( new Error( 'network' ) );
+		const RestMock = vi.fn();
+		RestMock.prototype.get = get;
+		global.mw.Rest = RestMock;
+
+		const el = makeHandleEl( '{"columnDefs":[{"field":"name"}]}' );
+		const skeleton = document.createElement( 'div' );
+		skeleton.className = 'ext-aggrid__skeleton';
+		el.appendChild( skeleton );
+		el.setAttribute( 'aria-busy', 'true' );
+
+		mountGrid( el );
+		await new Promise( ( r ) => {
+			setTimeout( r, 0 );
+		} );
+
+		expect( el.querySelector( '.ext-aggrid__skeleton' ) ).toBeNull();
+		expect( el.hasAttribute( 'aria-busy' ) ).toBe( false );
+		expect( global.agGrid.createGrid ).toHaveBeenCalledTimes( 1 );
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		expect( opts.rowData ).toEqual( [] );
+		expect( opts.overlayNoRowsTemplate ).toContain( 'aggrid-error-load' );
+
+		delete global.mw.Rest;
+	} );
 } );
