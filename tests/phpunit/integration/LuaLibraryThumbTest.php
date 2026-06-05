@@ -12,6 +12,7 @@ use MediaWiki\Extension\Scribunto\Engines\LuaCommon\LuaError;
 use MediaWiki\MainConfigNames;
 use MediaWiki\Parser\Parser;
 use MediaWiki\Parser\ParserOptions;
+use MediaWiki\Parser\ParserOutputLinkTypes;
 use MediaWiki\Title\Title;
 use MediaWikiIntegrationTestCase;
 use RepoGroup;
@@ -32,9 +33,12 @@ class LuaLibraryThumbTest extends MediaWikiIntegrationTestCase {
 		$result = $library->thumb( 'File:Definitely-missing-aggrid.png', 120, [] );
 
 		$this->assertSame( [], $result, 'missing file resolves to Lua nil' );
-		$this->assertArrayHasKey(
+		// getImages() is deprecated since MW 1.43; read the media link list instead.
+		$media = $parser->getOutput()->getLinkList( ParserOutputLinkTypes::MEDIA );
+		$tracked = array_map( static fn ( array $entry ) => $entry['link']->getDBkey(), $media );
+		$this->assertContains(
 			'Definitely-missing-aggrid.png',
-			$parser->getOutput()->getImages(),
+			$tracked,
 			'missing file is still tracked for LinksUpdate'
 		);
 	}
