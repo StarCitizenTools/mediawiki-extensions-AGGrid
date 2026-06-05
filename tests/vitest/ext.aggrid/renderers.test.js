@@ -21,6 +21,12 @@ describe( 'anchorWrap', () => {
 		const node = document.createTextNode( 'x' );
 		expect( anchorWrap( '//evil.com', node ) ).toBe( node );
 	} );
+
+	it( 'rejects data: and other non-allowlisted schemes', () => {
+		const node = document.createTextNode( 'x' );
+		expect( anchorWrap( 'data:text/html,<script>1</script>', node ) ).toBe( node );
+		expect( anchorWrap( 'DATA:foo', node ) ).toBe( node );
+	} );
 } );
 
 describe( 'withLink', () => {

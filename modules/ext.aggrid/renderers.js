@@ -43,9 +43,15 @@ function withLink( render ) {
 	};
 }
 
+// Coerce an absent (null/undefined) value to '', preserving a literal '' or 0 rather
+// than treating every falsy value as absent.
+function orEmpty( x ) {
+	return ( x === undefined || x === null ) ? '' : x;
+}
+
 function linkEl( params ) {
 	const v = params.value;
-	return document.createTextNode( v && v.text ? v.text : '' );
+	return document.createTextNode( orEmpty( v && v.text ) );
 }
 
 function imageEl( params ) {
@@ -63,6 +69,9 @@ function imageEl( params ) {
 	return img;
 }
 
+// A link-list value carries per-item links and must NOT carry a top-level href: each
+// entry is anchored individually here, so a top-level href (which withLink would wrap
+// the whole span in) would nest anchors. The Lua linkList helper never emits one.
 function linkListEl( params ) {
 	const span = document.createElement( 'span' );
 	const links = ( params.value && params.value.links ) || [];
@@ -74,14 +83,14 @@ function linkListEl( params ) {
 		if ( !first ) {
 			span.appendChild( document.createTextNode( ', ' ) );
 		}
-		span.appendChild( anchorWrap( link.href, document.createTextNode( link.text || '' ) ) );
+		span.appendChild( anchorWrap( link.href, document.createTextNode( orEmpty( link.text ) ) ) );
 		first = false;
 	} );
 	return span;
 }
 
 function linkText( v ) {
-	return ( v && v.text ) || '';
+	return orEmpty( v && v.text );
 }
 
 function imageAlt( v ) {
@@ -90,7 +99,7 @@ function imageAlt( v ) {
 
 function listText( v ) {
 	return ( ( v && v.links ) || [] )
-		.filter( ( l ) => l ).map( ( l ) => l.text || '' ).join( ', ' );
+		.filter( ( l ) => l ).map( ( l ) => orEmpty( l.text ) ).join( ', ' );
 }
 
 // Build a locale-aware comparator that sorts on a value's derived scalar text.
@@ -146,5 +155,7 @@ module.exports = {
 	anchorWrap: anchorWrap,
 	withLink: withLink,
 	buildColumnTypes: buildColumnTypes,
+	// @internal — exported for tests only. Consume the built-in types via
+	// buildColumnTypes(), which applies the withLink href modifier.
 	COLUMN_TYPES: COLUMN_TYPES
 };

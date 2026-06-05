@@ -62,7 +62,9 @@ function aggrid.linkList( targets )
 end
 
 -- Shallow-copy a column spec, preset its renderer type, and map `header` to AG Grid's
--- `headerName` so authors can use the shorter key.
+-- `headerName` so authors can use the shorter key. Note: the spec's `type` is reserved
+-- and always overwritten with the helper's renderer type; pass `headerName` directly if
+-- you prefer it over the `header` alias.
 local function column( spec, columnType )
 	local colDef = {}
 	for key, value in pairs( spec ) do

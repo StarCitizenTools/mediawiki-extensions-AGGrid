@@ -44,9 +44,21 @@ class LuaLibraryThumbTest extends MediaWikiIntegrationTestCase {
 		$this->newLibrary( $this->newStartedParser() )->thumb( '<<<bad', 120, [] );
 	}
 
-	public function testWidthOutOfRangeThrows(): void {
+	public function testNonFileNamespaceTitleThrows(): void {
+		// An explicit non-File namespace prefix overrides the NS_FILE default and must
+		// hit the namespace guard. (A bare "Main Page" would resolve to File:Main Page.)
+		$this->expectException( LuaError::class );
+		$this->newLibrary( $this->newStartedParser() )->thumb( 'Category:Demo', 120, [] );
+	}
+
+	public function testWidthBelowMinThrows(): void {
 		$this->expectException( LuaError::class );
 		$this->newLibrary( $this->newStartedParser() )->thumb( 'File:X.png', 0, [] );
+	}
+
+	public function testWidthAboveMaxThrows(): void {
+		$this->expectException( LuaError::class );
+		$this->newLibrary( $this->newStartedParser() )->thumb( 'File:X.png', 100000, [] );
 	}
 
 	public function testResolvableFileReturnsDescriptorAndHonoursOpts(): void {
