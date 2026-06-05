@@ -80,33 +80,43 @@ function linkListEl( params ) {
 	return span;
 }
 
-function byText( a, b ) {
-	return String( ( a && a.text ) || '' ).localeCompare( String( ( b && b.text ) || '' ) );
+function linkText( v ) {
+	return ( v && v.text ) || '';
+}
+
+function imageAlt( v ) {
+	return ( v && v.alt ) || '';
+}
+
+function listText( v ) {
+	return ( ( v && v.links ) || [] )
+		.filter( ( l ) => l ).map( ( l ) => l.text || '' ).join( ', ' );
+}
+
+// Build a locale-aware comparator that sorts on a value's derived scalar text.
+function compareBy( extract ) {
+	return ( a, b ) => String( extract( a ) ).localeCompare( String( extract( b ) ) );
 }
 
 // Each entry is a native AG Grid columnType (cellRenderer + sort/filter scalar). The
 // cellRenderers here are link-unaware; buildColumnTypes() wraps them with withLink.
+// valueFormatter drives display/filter/quick-search/export; comparator drives sort —
+// both operate on the derived scalar, never the raw object.
 const COLUMN_TYPES = {
 	aggridLink: {
 		cellRenderer: linkEl,
-		valueFormatter: function ( p ) {
-			return ( p.value && p.value.text ) || '';
-		},
-		comparator: byText
+		valueFormatter: ( p ) => linkText( p.value ),
+		comparator: compareBy( linkText )
 	},
 	aggridImage: {
 		cellRenderer: imageEl,
-		valueFormatter: function ( p ) {
-			return ( p.value && p.value.alt ) || '';
-		}
+		valueFormatter: ( p ) => imageAlt( p.value ),
+		comparator: compareBy( imageAlt )
 	},
 	aggridLinkList: {
 		cellRenderer: linkListEl,
-		valueFormatter: function ( p ) {
-			return ( ( p.value && p.value.links ) || [] )
-				.filter( ( l ) => l )
-				.map( ( l ) => l.text ).join( ', ' );
-		}
+		valueFormatter: ( p ) => listText( p.value ),
+		comparator: compareBy( listText )
 	}
 };
 

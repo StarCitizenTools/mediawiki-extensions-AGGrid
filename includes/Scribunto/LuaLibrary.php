@@ -121,7 +121,7 @@ class LuaLibrary extends LibraryBase {
 		// "wanted files" so the page refreshes when one is uploaded).
 		$parserOutput->addImage(
 			$title->getDBkey(),
-			$repoFile ? $repoFile->getTimestamp() : null,
+			$repoFile ? $repoFile->getTimestamp() : false,
 			$repoFile ? $repoFile->getSha1() : false
 		);
 

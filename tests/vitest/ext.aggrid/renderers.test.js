@@ -66,6 +66,20 @@ describe( 'built-in column types', () => {
 			.toBe( 'A, B' );
 	} );
 
+	it( 'aggridImage sorts by alt text', () => {
+		const t = buildColumnTypes().aggridImage;
+		expect( t.comparator( { alt: 'b' }, { alt: 'a' } ) ).toBeGreaterThan( 0 );
+		expect( t.comparator( null, null ) ).toBe( 0 );
+	} );
+
+	it( 'aggridLinkList sorts by joined link text', () => {
+		const t = buildColumnTypes().aggridLinkList;
+		expect( t.comparator(
+			{ links: [ { text: 'b' } ] }, { links: [ { text: 'a' } ] }
+		) ).toBeGreaterThan( 0 );
+		expect( t.comparator( null, null ) ).toBe( 0 );
+	} );
+
 	it( 'skips null entries in a link list without throwing', () => {
 		const t = buildColumnTypes().aggridLinkList;
 		let el;
