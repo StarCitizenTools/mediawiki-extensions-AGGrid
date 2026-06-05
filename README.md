@@ -1,23 +1,22 @@
 # AGGrid
 
-Build sortable, filterable [AG Grid](https://www.ag-grid.com/) data tables on wiki pages, straight from Lua. Put clickable links and thumbnails inside cells, page through large datasets, and match the wiki's light and dark themes automatically.
+Build sortable, filterable [AG Grid](https://www.ag-grid.com/) data tables on wiki pages, straight from Lua. Put clickable links and thumbnails inside cells, and page through large datasets.
 
 You write a standard AG Grid `gridOptions` table in Lua and call one function. The extension renders a lightweight placeholder, then hydrates it in the browser with the bundled AG Grid Community library. Grids load lazily as they scroll into view.
 
-**Highlights**
+## ✨ Highlights
 
 - Author full AG Grid `gridOptions` in Lua; existing AG Grid knowledge carries straight over.
 - Clickable wikilinks, thumbnails, linked thumbnails, and link lists inside cells.
 - Sort, filter, quick-search, and CSV export all work on the underlying values.
-- Follows the wiki's light/dark colour scheme and skin colours, with no setup.
 - Lazy-loads, and on saved pages serves rows from a cacheable REST endpoint.
 
-## Requirements
+## 📋 Requirements
 
 - MediaWiki 1.43 or later
 - [Scribunto](https://www.mediawiki.org/wiki/Extension:Scribunto) (required)
 
-## Installation
+## 📦 Installation
 
 Drop the extension in `extensions/AGGrid` and load it from `LocalSettings.php`:
 
@@ -25,7 +24,7 @@ Drop the extension in `extensions/AGGrid` and load it from `LocalSettings.php`:
 wfLoadExtension( 'AGGrid' );
 ```
 
-## Quick start
+## 🚀 Quick start
 
 Pass a `gridOptions` table to `render`:
 
@@ -47,7 +46,7 @@ mw.ext.aggrid.render( {
 
 One limit to know up front: function options such as `cellRenderer` and `comparator` can't cross into JSON. For links and thumbnails, reach for the rich-cell helpers below.
 
-## Links, thumbnails, and other rich cells
+## 🔗 Links, thumbnails, and other rich cells
 
 To show a clickable link or a thumbnail in a cell, you can't pass an AG Grid renderer function from Lua. Instead, AGGrid ships ready-made **column types**: build a structured cell value with a helper, then tag the column with its matching helper.
 
@@ -83,7 +82,7 @@ What makes this safe and fast:
 - **Sorting and filtering use the text, not the markup.** Sort, filter, quick-search, and CSV export read each cell's underlying text (link text, alt text, joined list text), while the cell shows the rich content.
 - **Output is escaped by default.** Renderers build DOM with `textContent` and typed properties, never `innerHTML`, and only allow `http(s):`, root-relative, `./`, and `#` link targets.
 
-## Lua API (`mw.ext.aggrid`)
+## 📖 Lua API (`mw.ext.aggrid`)
 
 ### Render
 
@@ -111,11 +110,11 @@ Each helper returns a `colDef` with the right renderer `type` already set, and l
 
 Prefer to write it by hand? Set the type directly: `{ field = 'name', type = 'aggridLink' }`.
 
-## Theming
+## 🎨 Theming
 
-Grids inherit the wiki's look. The AG Grid theme maps to MediaWiki's Codex design tokens, so light, dark, and OS colour schemes (plus skin colour overrides) flow through the CSS cascade with no configuration. Need a different look? Set `gridOptions.theme`.
+Grids pick up the wiki's colours from the active skin. The AG Grid theme maps to MediaWiki's Codex design tokens, so on skins that expose those tokens, light, dark, and OS colour schemes (and skin colour overrides) flow through the CSS cascade with no configuration. On skins that don't provide Codex tokens, the grid falls back to a readable light theme. Either way, override it by setting `gridOptions.theme`.
 
-## Add your own cell types
+## 🧩 Add your own cell types
 
 Other extensions, skins, or site scripts (`MediaWiki:Common.js`) can register extra column types before grids mount:
 
@@ -134,15 +133,15 @@ mw.hook( 'ext.aggrid.registerColumnTypes' ).add( ( types, withLink ) => {
 
 The handler receives the type map and `withLink`, an optional helper that wraps a renderer's output in a scheme-checked link. Build DOM safely: use `textContent` and typed properties, never `innerHTML` on cell values.
 
-## Limits
+## 📏 Limits
 
 Inline `rowData` is capped at 5,000 rows. For larger datasets, use a structured-data backend. On saved pages, rows are served from a cacheable REST endpoint rather than inlined into the page HTML.
 
-## See also
+## 🔎 See also
 
 - [Extension page on mediawiki.org](https://www.mediawiki.org/wiki/Extension:AGGrid)
 - [AG Grid documentation](https://www.ag-grid.com/javascript-data-grid/)
 
-## License
+## ⚖️ License
 
 GPL-3.0-or-later. Bundles AG Grid Community (MIT); see `modules/lib/ag-grid-community/LICENSE.txt`.
