@@ -9,7 +9,7 @@
 
 // Only safe link schemes. hrefs are MediaWiki-generated server-side; this is defence in
 // depth against a hand-built value.
-const SAFE_HREF = /^(?:https?:|\/|\.\/|#)/;
+const SAFE_HREF = /^(?:https?:|\/(?!\/)|\.\/|#)/;
 
 /**
  * Wrap a node in an anchor when href is a safe scheme; otherwise return it unwrapped.
@@ -52,7 +52,9 @@ function imageEl( params ) {
 	const v = params.value;
 	const img = document.createElement( 'img' );
 	if ( v ) {
-		img.src = v.src;
+		if ( v.src ) {
+			img.src = v.src;
+		}
 		if ( v.width ) {
 			img.width = v.width;
 		}
@@ -64,11 +66,16 @@ function imageEl( params ) {
 function linkListEl( params ) {
 	const span = document.createElement( 'span' );
 	const links = ( params.value && params.value.links ) || [];
-	links.forEach( ( link, i ) => {
-		if ( i ) {
+	let first = true;
+	links.forEach( ( link ) => {
+		if ( !link ) {
+			return;
+		}
+		if ( !first ) {
 			span.appendChild( document.createTextNode( ', ' ) );
 		}
 		span.appendChild( anchorWrap( link.href, document.createTextNode( link.text || '' ) ) );
+		first = false;
 	} );
 	return span;
 }
@@ -97,6 +104,7 @@ const COLUMN_TYPES = {
 		cellRenderer: linkListEl,
 		valueFormatter: function ( p ) {
 			return ( ( p.value && p.value.links ) || [] )
+				.filter( ( l ) => l )
 				.map( ( l ) => l.text ).join( ', ' );
 		}
 	}

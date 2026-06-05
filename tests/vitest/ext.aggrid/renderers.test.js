@@ -16,6 +16,11 @@ describe( 'anchorWrap', () => {
 		expect( anchorWrap( 'javascript:alert(1)', node ) ).toBe( node );
 		expect( anchorWrap( undefined, node ) ).toBe( node );
 	} );
+
+	it( 'rejects protocol-relative // hrefs', () => {
+		const node = document.createTextNode( 'x' );
+		expect( anchorWrap( '//evil.com', node ) ).toBe( node );
+	} );
 } );
 
 describe( 'withLink', () => {
@@ -59,6 +64,22 @@ describe( 'built-in column types', () => {
 		expect( el.textContent ).toBe( 'A, B' );
 		expect( t.valueFormatter( { value: { links: [ { text: 'A' }, { text: 'B' } ] } } ) )
 			.toBe( 'A, B' );
+	} );
+
+	it( 'skips null entries in a link list without throwing', () => {
+		const t = buildColumnTypes().aggridLinkList;
+		let el;
+		expect( () => {
+			el = t.cellRenderer( { value: { links: [ null, { text: 'A', href: '/wiki/A' } ] } } );
+		} ).not.toThrow();
+		expect( el.querySelectorAll( 'a' ).length ).toBe( 1 );
+		expect( el.textContent ).toBe( 'A' );
+	} );
+
+	it( 'does not set img.src when the value has no src', () => {
+		const t = buildColumnTypes().aggridImage;
+		const img = t.cellRenderer( { value: { width: 120 } } );
+		expect( img.hasAttribute( 'src' ) ).toBe( false );
 	} );
 
 	it( 'renders empty for null values without throwing', () => {
