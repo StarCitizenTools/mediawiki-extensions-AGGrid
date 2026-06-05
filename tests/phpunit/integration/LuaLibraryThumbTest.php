@@ -4,6 +4,8 @@ declare( strict_types=1 );
 
 namespace MediaWiki\Extension\AGGrid\Tests\Integration;
 
+use File;
+use MediaTransformOutput;
 use MediaWiki\Extension\AGGrid\Scribunto\LuaLibrary;
 use MediaWiki\Extension\Scribunto\Engines\LuaCommon\LuaError;
 use MediaWiki\Extension\Scribunto\Scribunto;
@@ -12,6 +14,7 @@ use MediaWiki\Parser\Parser;
 use MediaWiki\Parser\ParserOptions;
 use MediaWiki\Title\Title;
 use MediaWikiIntegrationTestCase;
+use RepoGroup;
 
 /**
  * @covers \MediaWiki\Extension\AGGrid\Scribunto\LuaLibrary
@@ -47,18 +50,18 @@ class LuaLibraryThumbTest extends MediaWikiIntegrationTestCase {
 	}
 
 	public function testResolvableFileReturnsDescriptorAndHonoursOpts(): void {
-		$thumb = $this->createMock( \MediaTransformOutput::class );
+		$thumb = $this->createMock( MediaTransformOutput::class );
 		$thumb->method( 'isError' )->willReturn( false );
 		$thumb->method( 'getUrl' )->willReturn( '/w/images/thumb/x/120px-X.png' );
 		$thumb->method( 'getWidth' )->willReturn( 120 );
 
-		$file = $this->createMock( \File::class );
+		$file = $this->createMock( File::class );
 		$file->method( 'exists' )->willReturn( true );
 		$file->method( 'getTimestamp' )->willReturn( '20240101000000' );
 		$file->method( 'getSha1' )->willReturn( 'deadbeef' );
 		$file->method( 'transform' )->willReturn( $thumb );
 
-		$repoGroup = $this->createMock( \RepoGroup::class );
+		$repoGroup = $this->createMock( RepoGroup::class );
 		$repoGroup->method( 'findFile' )->willReturn( $file );
 		$this->setService( 'RepoGroup', $repoGroup );
 
