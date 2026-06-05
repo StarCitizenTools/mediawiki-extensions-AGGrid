@@ -140,6 +140,24 @@ describe( 'mountGrid', () => {
 		expect( opts.overlayNoRowsTemplate ).toContain( 'aggrid-error-load' );
 	} );
 
+	it( 'wires the built-in rich-cell column types into gridOptions', () => {
+		const el = makeEl( '{"columnDefs":[{"field":"name","type":"aggridLink"}],"rowData":[]}' );
+		mountGrid( el );
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		expect( typeof opts.columnTypes.aggridLink.cellRenderer ).toBe( 'function' );
+		expect( typeof opts.columnTypes.aggridImage.cellRenderer ).toBe( 'function' );
+		expect( typeof opts.columnTypes.aggridLinkList.cellRenderer ).toBe( 'function' );
+	} );
+
+	it( 'lets built-in column types win over author-supplied ones of the same name', () => {
+		const el = makeEl(
+			'{"columnDefs":[],"rowData":[],"columnTypes":{"aggridLink":{"width":99}}}'
+		);
+		mountGrid( el );
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		expect( typeof opts.columnTypes.aggridLink.cellRenderer ).toBe( 'function' );
+	} );
+
 	it( 'mounts an error overlay when the row fetch fails', async () => {
 		const get = vi.fn().mockRejectedValue( new Error( 'network' ) );
 		const RestMock = vi.fn();

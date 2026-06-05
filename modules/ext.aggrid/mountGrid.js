@@ -1,6 +1,7 @@
 /* global agGrid */
 
 const { getWikiTheme } = require( './theme.js' );
+const { buildColumnTypes } = require( './renderers.js' );
 
 const PLACEHOLDER_SELECTOR = '.ext-aggrid';
 const CONFIG_ATTR = 'data-mw-aggrid-options';
@@ -55,6 +56,12 @@ function finishMount( el, gridOptions ) {
 	if ( !gridOptions.theme ) {
 		gridOptions.theme = getWikiTheme();
 	}
+	// Register the built-in rich-cell column types (link/image/link-list). Built-ins
+	// win over author-supplied entries of the same reserved name — those can't carry
+	// the cellRenderer function across the JSON boundary anyway.
+	gridOptions.columnTypes = Object.assign(
+		{}, gridOptions.columnTypes, buildColumnTypes()
+	);
 	// AG Grid expects an empty container.
 	const skeleton = el.querySelector( '.ext-aggrid__skeleton' );
 	if ( skeleton ) {

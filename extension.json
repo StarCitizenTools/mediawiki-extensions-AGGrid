@@ -71,7 +71,8 @@
 				"ext.aggrid/init.js",
 				"ext.aggrid/mountGrid.js",
 				"ext.aggrid/theme.js",
-				"ext.aggrid/lazyMount.js"
+				"ext.aggrid/lazyMount.js",
+				"ext.aggrid/renderers.js"
 			],
 			"dependencies": [
 				"mediawiki.api"
