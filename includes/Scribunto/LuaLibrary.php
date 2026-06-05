@@ -7,10 +7,12 @@ namespace MediaWiki\Extension\AGGrid\Scribunto;
 use MediaWiki\Extension\Scribunto\Engines\LuaCommon\LibraryBase;
 use MediaWiki\Extension\Scribunto\Engines\LuaCommon\LuaError;
 use MediaWiki\MediaWikiServices;
+use MediaWiki\Title\Title;
 
 class LuaLibrary extends LibraryBase {
 
 	private const MAX_ROWS = 5000;
+	private const MAX_THUMB_WIDTH = 2048;
 
 	/**
 	 * @inheritDoc
@@ -18,6 +20,7 @@ class LuaLibrary extends LibraryBase {
 	public function register(): array {
 		$lib = [
 			'render' => [ $this, 'render' ],
+			'thumb' => [ $this, 'thumb' ],
 		];
 
 		return $this->getEngine()->registerInterface(
@@ -74,5 +77,76 @@ class LuaLibrary extends LibraryBase {
 
 		// Strip marker keeps the parser from reprocessing the raw HTML.
 		return [ $parser->insertStripItem( $html ) ];
+	}
+
+	/**
+	 * Resolve a File title + width into a thumbnail descriptor for a rich image cell.
+	 *
+	 * Resolution happens server-side during the parse so the client renderer stays a
+	 * pure value->DOM builder. The file is registered on ParserOutput so LinksUpdate
+	 * reparses the page (re-resolving the URL) when the file changes, moves or is
+	 * deleted — matching [[File:...]] behaviour.
+	 *
+	 * @param mixed $file File title (e.g. "File:Aurora.jpg").
+	 * @param mixed $width Thumbnail width in px.
+	 * @param mixed $opts Table: { link = <page title>, alt = <string> }.
+	 * @return array Single-element [ descriptor ] on success, or [] (Lua nil) if missing.
+	 * @throws LuaError
+	 */
+	public function thumb( $file = null, $width = null, $opts = null ): array {
+		$this->checkType( 'mw.ext.aggrid.thumb', 1, $file, 'string' );
+		$this->checkType( 'mw.ext.aggrid.thumb', 2, $width, 'number' );
+		if ( $opts === null ) {
+			$opts = [];
+		}
+		$this->checkType( 'mw.ext.aggrid.thumb', 3, $opts, 'table' );
+
+		$width = (int)$width;
+		if ( $width < 1 || $width > self::MAX_THUMB_WIDTH ) {
+			throw new LuaError(
+				'mw.ext.aggrid.thumb: width must be between 1 and ' . self::MAX_THUMB_WIDTH
+			);
+		}
+
+		$services = MediaWikiServices::getInstance();
+		$title = Title::newFromText( (string)$file, NS_FILE );
+		if ( !$title || $title->getNamespace() !== NS_FILE ) {
+			throw new LuaError( 'mw.ext.aggrid.thumb: "' . $file . '" is not a valid File title' );
+		}
+
+		$parserOutput = $this->getParser()->getOutput();
+		$repoFile = $services->getRepoGroup()->findFile( $title );
+
+		// Track the dependency regardless of existence (missing files become tracked
+		// "wanted files" so the page refreshes when one is uploaded).
+		$parserOutput->addImage(
+			$title->getDBkey(),
+			$repoFile ? $repoFile->getTimestamp() : null,
+			$repoFile ? $repoFile->getSha1() : false
+		);
+
+		if ( !$repoFile || !$repoFile->exists() ) {
+			return [];
+		}
+
+		$thumb = $repoFile->transform( [ 'width' => $width ] );
+		if ( !$thumb || $thumb->isError() ) {
+			return [];
+		}
+
+		$descriptor = [
+			'src' => $thumb->getUrl(),
+			'width' => $thumb->getWidth(),
+			'alt' => isset( $opts['alt'] ) ? (string)$opts['alt'] : $title->getText(),
+		];
+
+		if ( isset( $opts['link'] ) ) {
+			$linkTitle = Title::newFromText( (string)$opts['link'] );
+			if ( $linkTitle ) {
+				$descriptor['href'] = $linkTitle->getLocalURL();
+			}
+		}
+
+		return [ $descriptor ];
 	}
 }
