@@ -7,8 +7,8 @@ namespace MediaWiki\Extension\AGGrid\Tests\Integration;
 use File;
 use MediaTransformOutput;
 use MediaWiki\Extension\AGGrid\Scribunto\LuaLibrary;
+use MediaWiki\Extension\Scribunto\Engines\LuaCommon\LuaEngine;
 use MediaWiki\Extension\Scribunto\Engines\LuaCommon\LuaError;
-use MediaWiki\Extension\Scribunto\Scribunto;
 use MediaWiki\MainConfigNames;
 use MediaWiki\Parser\Parser;
 use MediaWiki\Parser\ParserOptions;
@@ -107,8 +107,11 @@ class LuaLibraryThumbTest extends MediaWikiIntegrationTestCase {
 	}
 
 	private function newLibrary( Parser $parser ): LuaLibrary {
-		$engine = Scribunto::newDefaultEngine( [ 'parser' => $parser ] );
-		$engine->setTitle( $parser->getTitle() );
+		// Mock the engine instead of constructing a real one: the engine's concrete
+		// factory API has changed across MW versions, and thumb() only needs the
+		// parser (for ParserOutput) plus checkType(), which uses pure type inspection.
+		$engine = $this->createMock( LuaEngine::class );
+		$engine->method( 'getParser' )->willReturn( $parser );
 		return new LuaLibrary( $engine );
 	}
 }
