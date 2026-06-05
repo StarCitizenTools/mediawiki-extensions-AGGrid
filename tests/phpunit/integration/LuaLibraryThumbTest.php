@@ -46,6 +46,40 @@ class LuaLibraryThumbTest extends MediaWikiIntegrationTestCase {
 		$this->newLibrary( $this->newStartedParser() )->thumb( 'File:X.png', 0, [] );
 	}
 
+	public function testResolvableFileReturnsDescriptorAndHonoursOpts(): void {
+		$thumb = $this->createMock( \MediaTransformOutput::class );
+		$thumb->method( 'isError' )->willReturn( false );
+		$thumb->method( 'getUrl' )->willReturn( '/w/images/thumb/x/120px-X.png' );
+		$thumb->method( 'getWidth' )->willReturn( 120 );
+
+		$file = $this->createMock( \File::class );
+		$file->method( 'exists' )->willReturn( true );
+		$file->method( 'getTimestamp' )->willReturn( '20240101000000' );
+		$file->method( 'getSha1' )->willReturn( 'deadbeef' );
+		$file->method( 'transform' )->willReturn( $thumb );
+
+		$repoGroup = $this->createMock( \RepoGroup::class );
+		$repoGroup->method( 'findFile' )->willReturn( $file );
+		$this->setService( 'RepoGroup', $repoGroup );
+
+		$library = $this->newLibrary( $this->newStartedParser() );
+
+		// Default alt is the file's page text; link adds an href.
+		$result = $library->thumb( 'File:X.png', 120, [ 'link' => 'Project:Sandbox' ] );
+		$this->assertCount( 1, $result );
+		$descriptor = $result[0];
+		$this->assertSame( '/w/images/thumb/x/120px-X.png', $descriptor['src'] );
+		$this->assertSame( 120, $descriptor['width'] );
+		$this->assertSame( 'X.png', $descriptor['alt'] );
+		$this->assertArrayHasKey( 'href', $descriptor );
+		$this->assertNotSame( '', $descriptor['href'] );
+
+		// alt override is honoured.
+		$withAlt = $library->thumb( 'File:X.png', 120, [ 'alt' => 'Custom alt' ] );
+		$this->assertSame( 'Custom alt', $withAlt[0]['alt'] );
+		$this->assertArrayNotHasKey( 'href', $withAlt[0] );
+	}
+
 	private function newStartedParser(): Parser {
 		$parser = $this->getServiceContainer()->getParserFactory()->create();
 		$parser->startExternalParse(
