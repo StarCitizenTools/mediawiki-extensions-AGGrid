@@ -1,28 +1,33 @@
 # AGGrid
 
-A MediaWiki extension that renders [AG Grid](https://www.ag-grid.com/) data grids on wiki
-pages via a [Scribunto](https://www.mediawiki.org/wiki/Extension:Scribunto)/Lua library
-(`mw.ext.aggrid`).
+Build sortable, filterable [AG Grid](https://www.ag-grid.com/) data tables on wiki pages, straight from Lua. Put clickable links and thumbnails inside cells, page through large datasets, and match the wiki's light and dark themes automatically.
 
-Lua builds an AG Grid `gridOptions` table; PHP emits a placeholder carrying the config as
-JSON; a ResourceLoader module hydrates it client-side with the vendored AG Grid Community
-bundle. The grid lazy-loads as it nears the viewport and follows the wiki's light/dark
-colour scheme via Codex design tokens.
+You write a standard AG Grid `gridOptions` table in Lua and call one function. The extension renders a lightweight placeholder, then hydrates it in the browser with the bundled AG Grid Community library. Grids load lazily as they scroll into view.
+
+**Highlights**
+
+- Author full AG Grid `gridOptions` in Lua; existing AG Grid knowledge carries straight over.
+- Clickable wikilinks, thumbnails, linked thumbnails, and link lists inside cells.
+- Sort, filter, quick-search, and CSV export all work on the underlying values.
+- Follows the wiki's light/dark colour scheme and skin colours, with no setup.
+- Lazy-loads, and on saved pages serves rows from a cacheable REST endpoint.
 
 ## Requirements
 
-- MediaWiki 1.43+
-- [Scribunto](https://www.mediawiki.org/wiki/Extension:Scribunto) (hard dependency)
+- MediaWiki 1.43 or later
+- [Scribunto](https://www.mediawiki.org/wiki/Extension:Scribunto) (required)
 
 ## Installation
 
-Place the extension in `extensions/AGGrid` and add to `LocalSettings.php`:
+Drop the extension in `extensions/AGGrid` and load it from `LocalSettings.php`:
 
 ```php
 wfLoadExtension( 'AGGrid' );
 ```
 
-## Usage
+## Quick start
+
+Pass a `gridOptions` table to `render`:
 
 ```lua
 mw.ext.aggrid.render( {
@@ -38,17 +43,13 @@ mw.ext.aggrid.render( {
 } )
 ```
 
-The table passed to `render` is an AG Grid [`gridOptions`](https://www.ag-grid.com/javascript-data-grid/grid-options/) object, mirrored 1:1. `columnDefs` and `rowData` are required.
+`gridOptions` mirrors AG Grid's [`gridOptions`](https://www.ag-grid.com/javascript-data-grid/grid-options/) object one to one, so anything JSON-serialisable from their docs works here. `columnDefs` and `rowData` are required.
 
-Function-based options (`cellRenderer`, `comparator`, …) can't cross the JSON boundary —
-use the rich-cell helpers below for links and thumbnails.
+One limit to know up front: function options such as `cellRenderer` and `comparator` can't cross into JSON. For links and thumbnails, reach for the rich-cell helpers below.
 
-## Rich cells: links, thumbnails, and link lists
+## Links, thumbnails, and other rich cells
 
-Cell values that need to be **clickable links** or **thumbnails** can't be expressed as AG
-Grid renderer functions from Lua. Instead, the extension ships named **column types** that
-render structured cell values into safe DOM. You produce the values with helper functions
-and tag each column with the matching column helper:
+To show a clickable link or a thumbnail in a cell, you can't pass an AG Grid renderer function from Lua. Instead, AGGrid ships ready-made **column types**: build a structured cell value with a helper, then tag the column with its matching helper.
 
 ```lua
 local aggrid = require( 'mw.ext.aggrid' )
@@ -75,59 +76,48 @@ end
 return p
 ```
 
-Key properties:
+What makes this safe and fast:
 
-- **Resolution is server-side.** Links and thumbnails resolve to URLs during the page
-  parse, so the client renderers never make network requests.
-- **`href` is an orthogonal modifier.** Any rich cell value may carry an `href`; the
-  renderer wraps its output in an anchor. That's how a thumbnail becomes a *linked*
-  thumbnail (`aggrid.thumb( file, width, { link = ... } )`).
-- **Sort/filter use the text, not the object.** Sorting, filtering, quick-search, and CSV
-  export operate on the cell's underlying text (link text, alt text, joined list text),
-  while the cell *displays* the rich content.
-- **Safe by construction.** Renderers build DOM with `textContent` and typed properties
-  (never `innerHTML`), and only allow `http(s):`, root-relative, `./`, and `#` link
-  schemes.
+- **Links and thumbnails resolve on the server**, during the page parse, so the browser never makes extra requests to render a cell.
+- **Linking is a modifier, not a separate type.** Any cell value can carry an `href`, and the renderer wraps it in a link. That is how a thumbnail becomes a *linked* thumbnail: `aggrid.thumb( file, width, { link = ... } )`.
+- **Sorting and filtering use the text, not the markup.** Sort, filter, quick-search, and CSV export read each cell's underlying text (link text, alt text, joined list text), while the cell shows the rich content.
+- **Output is escaped by default.** Renderers build DOM with `textContent` and typed properties, never `innerHTML`, and only allow `http(s):`, root-relative, `./`, and `#` link targets.
 
-## Lua API — `mw.ext.aggrid`
+## Lua API (`mw.ext.aggrid`)
 
-### Rendering
+### Render
 
 | Function | Returns | Description |
 | --- | --- | --- |
-| `render( gridOptions )` | wikitext | Render a grid. `columnDefs` and `rowData` are required. |
+| `render( gridOptions )` | wikitext | Renders a grid. `columnDefs` and `rowData` are required. |
 
-### Cell value helpers
+### Build cell values
 
 | Function | Returns | Description |
 | --- | --- | --- |
-| `link( target, text? )` | `{ text, href }` or `nil` | A wikilink cell to page `target`; `text` defaults to the title's display text. `nil` if the title can't be parsed. |
-| `thumb( file, width, opts? )` | `{ src, width, alt, href? }` or `nil` | A thumbnail of `file` (a `File:` title) at `width` px. `opts.link` makes it a linked thumbnail; `opts.alt` overrides the alt text (default: the file's page title). `nil` if the file is missing. |
-| `linkList( targets )` | `{ links = { … } }` | A comma-separated list of wikilinks from a sequence of page titles. Unparseable titles are skipped. |
+| `link( target, text? )` | `{ text, href }` or `nil` | A wikilink to page `target`. `text` defaults to the title's display text. Returns `nil` if the title can't be parsed. |
+| `thumb( file, width, opts? )` | `{ src, width, alt, href? }` or `nil` | A thumbnail of `file` (a `File:` title) at `width` px. `opts.link` makes it a linked thumbnail; `opts.alt` overrides the alt text (default: the file's page title). Returns `nil` if the file is missing. |
+| `linkList( targets )` | `{ links = { … } }` | A comma-separated row of wikilinks from a list of page titles. Unparseable titles are skipped. |
 
-### Column helpers
+### Tag columns
 
-Each returns a `colDef` with the matching renderer `type` preset, and maps the short
-`header` key to AG Grid's `headerName`. Other `colDef` keys pass through; the `type` key is
-reserved (always set by the helper).
+Each helper returns a `colDef` with the right renderer `type` already set, and lets you use the shorter `header` key in place of AG Grid's `headerName`. Any other `colDef` keys pass straight through. `type` is managed by the helper, so setting it yourself has no effect.
 
-| Function | Column type | Use with |
+| Function | Column type | Pairs with |
 | --- | --- | --- |
 | `linkColumn( spec )` | `aggridLink` | `link()` values |
 | `imageColumn( spec )` | `aggridImage` | `thumb()` values |
 | `linkListColumn( spec )` | `aggridLinkList` | `linkList()` values |
 
-Columns can also be written by hand: `{ field = 'name', type = 'aggridLink' }`.
+Prefer to write it by hand? Set the type directly: `{ field = 'name', type = 'aggridLink' }`.
 
 ## Theming
 
-The grid uses an AG Grid theme mapped to MediaWiki's Codex design tokens, so it follows the
-wiki's light/dark/OS colour scheme and skin colour customisations through the CSS cascade.
-Override by setting `gridOptions.theme`.
+Grids inherit the wiki's look. The AG Grid theme maps to MediaWiki's Codex design tokens, so light, dark, and OS colour schemes (plus skin colour overrides) flow through the CSS cascade with no configuration. Need a different look? Set `gridOptions.theme`.
 
-## Extending with custom column types
+## Add your own cell types
 
-Other extensions or skins can register additional column types before grids mount:
+Other extensions, skins, or site scripts (`MediaWiki:Common.js`) can register extra column types before grids mount:
 
 ```javascript
 mw.hook( 'ext.aggrid.registerColumnTypes' ).add( ( types, withLink ) => {
@@ -142,20 +132,17 @@ mw.hook( 'ext.aggrid.registerColumnTypes' ).add( ( types, withLink ) => {
 } );
 ```
 
-`withLink` is the optional anchor-wrapping helper; renderers must build DOM safely (no
-`innerHTML` of untrusted values).
+The handler receives the type map and `withLink`, an optional helper that wraps a renderer's output in a scheme-checked link. Build DOM safely: use `textContent` and typed properties, never `innerHTML` on cell values.
 
 ## Limits
 
-Inline `rowData` is capped (5000 rows) — for larger datasets use a structured data
-backend. On saved pages, row data is served from a cacheable REST endpoint rather than
-embedded in the page HTML.
+Inline `rowData` is capped at 5,000 rows. For larger datasets, use a structured-data backend. On saved pages, rows are served from a cacheable REST endpoint rather than inlined into the page HTML.
 
 ## See also
 
-- Extension page: <https://www.mediawiki.org/wiki/Extension:AGGrid>
-- AG Grid documentation: <https://www.ag-grid.com/javascript-data-grid/>
+- [Extension page on mediawiki.org](https://www.mediawiki.org/wiki/Extension:AGGrid)
+- [AG Grid documentation](https://www.ag-grid.com/javascript-data-grid/)
 
 ## License
 
-GPL-3.0-or-later. Bundles AG Grid Community (MIT) — see `modules/lib/ag-grid-community/LICENSE.txt`.
+GPL-3.0-or-later. Bundles AG Grid Community (MIT); see `modules/lib/ag-grid-community/LICENSE.txt`.
