@@ -2,6 +2,7 @@
 
 const { getWikiTheme } = require( './theme.js' );
 const { buildColumnTypes } = require( './renderers.js' );
+const { SetFilter } = require( './setFilter.js' );
 
 const PLACEHOLDER_SELECTOR = '.ext-aggrid';
 const CONFIG_ATTR = 'data-mw-aggrid-options';
@@ -61,6 +62,11 @@ function finishMount( el, gridOptions ) {
 	// the cellRenderer function across the JSON boundary anyway.
 	gridOptions.columnTypes = Object.assign(
 		{}, gridOptions.columnTypes, buildColumnTypes()
+	);
+	// Register the built-in set filter under its reserved name. Built-in wins over an
+	// author entry of the same name (a real component can't cross the JSON boundary anyway).
+	gridOptions.components = Object.assign(
+		{}, gridOptions.components, { aggridSet: SetFilter }
 	);
 	// AG Grid expects an empty container.
 	const skeleton = el.querySelector( '.ext-aggrid__skeleton' );
