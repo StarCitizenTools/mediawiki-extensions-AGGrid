@@ -72,13 +72,17 @@
 				"ext.aggrid/mountGrid.js",
 				"ext.aggrid/theme.js",
 				"ext.aggrid/lazyMount.js",
-				"ext.aggrid/renderers.js"
+				"ext.aggrid/renderers.js",
+				"ext.aggrid/setFilter.js"
 			],
 			"dependencies": [
 				"mediawiki.api"
 			],
 			"messages": [
-				"aggrid-error-load"
+				"aggrid-error-load",
+				"aggrid-setfilter-search-placeholder",
+				"aggrid-setfilter-select-all",
+				"aggrid-setfilter-blanks"
 			]
 		}
 	},

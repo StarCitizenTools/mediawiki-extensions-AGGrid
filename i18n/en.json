@@ -5,5 +5,8 @@
 		]
 	},
 	"aggrid-desc": "Renders AG Grid data grids",
-	"aggrid-error-load": "Could not load the grid data."
+	"aggrid-error-load": "Could not load the grid data.",
+	"aggrid-setfilter-search-placeholder": "Search…",
+	"aggrid-setfilter-select-all": "(Select all)",
+	"aggrid-setfilter-blanks": "(Blanks)"
 }

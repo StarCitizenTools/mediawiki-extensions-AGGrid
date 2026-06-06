@@ -5,5 +5,8 @@
 		]
 	},
 	"aggrid-desc": "{{desc|name=AGGrid|url=https://www.mediawiki.org/wiki/Extension:AGGrid}}",
-	"aggrid-error-load": "Error message shown inside an AG Grid (as its overlay) when the grid's row data fails to load from the server."
+	"aggrid-error-load": "Error message shown inside an AG Grid (as its overlay) when the grid's row data fails to load from the server.",
+	"aggrid-setfilter-search-placeholder": "Placeholder text in the search box of a column's set filter, used to narrow a long list of values.",
+	"aggrid-setfilter-select-all": "Label for the checkbox at the top of a set filter that selects or clears every value at once. Shown in parentheses to mark it apart from data values.",
+	"aggrid-setfilter-blanks": "Label for the set-filter entry that groups rows whose cell is empty. Shown in parentheses to mark it apart from data values."
 }

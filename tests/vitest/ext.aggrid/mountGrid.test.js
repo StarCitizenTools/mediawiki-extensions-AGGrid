@@ -158,6 +158,23 @@ describe( 'mountGrid', () => {
 		expect( typeof opts.columnTypes.aggridLink.cellRenderer ).toBe( 'function' );
 	} );
 
+	it( 'registers the set filter component under the aggridSet name', () => {
+		const el = makeEl( '{"columnDefs":[{"field":"t","filter":"aggridSet"}],"rowData":[]}' );
+		mountGrid( el );
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		expect( typeof opts.components.aggridSet ).toBe( 'function' );
+	} );
+
+	it( 'lets the built-in set filter win over an author-supplied one', () => {
+		const el = makeEl(
+			'{"columnDefs":[],"rowData":[],"components":{"aggridSet":{"x":1},"keep":{"y":2}}}'
+		);
+		mountGrid( el );
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		expect( typeof opts.components.aggridSet ).toBe( 'function' );
+		expect( opts.components.keep ).toEqual( { y: 2 } );
+	} );
+
 	it( 'mounts an error overlay when the row fetch fails', async () => {
 		const get = vi.fn().mockRejectedValue( new Error( 'network' ) );
 		const RestMock = vi.fn();
