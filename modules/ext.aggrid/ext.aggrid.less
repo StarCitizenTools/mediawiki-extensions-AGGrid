@@ -33,6 +33,41 @@
 	text-align: center;
 }
 
+// The popup mirrors AG Grid's Enterprise set-filter DOM (ag-set-filter / ag-mini-filter /
+// ag-set-filter-list / ag-set-filter-item), so the active grid theme — mapped from Codex
+// tokens by theme.js — styles it natively, matching the grid's built-in filters and any
+// custom gridOptions.theme. We add only what the theme leaves to the host: the value counts
+// and a few overrides, since AG Grid normally sizes the list/items via its virtual scroller
+// (which we don't run). Overrides are scoped under the root so they win regardless of the
+// order AG Grid injects its theme stylesheet.
+.ext-aggrid-setfilter {
+	min-width: 180px;
+
+	.ext-aggrid-setfilter__list {
+		// set-filter-list assumes a fixed virtual-scroller height; size to a bounded scroll.
+		height: auto;
+		max-height: 240px;
+		// Vertical breathing room matching AG Grid's own filter bodies. The top margin
+		// collapses with the mini-filter's; the bottom margin is held by the popup border.
+		margin-block: var( --ag-widget-container-vertical-padding, 0.75rem );
+		overflow-y: auto;
+	}
+
+	.ext-aggrid-setfilter__item {
+		align-items: center;
+		// set-filter-item fills the virtual row (height: 100%); size to content instead.
+		height: auto;
+		min-height: var( --ag-list-item-height, 1.75rem );
+		cursor: pointer;
+	}
+}
+
+.ext-aggrid-setfilter__count {
+	padding-right: var( --ag-spacing, 8px );
+	margin-left: auto;
+	opacity: 0.7;
+}
+
 @media ( prefers-reduced-motion: no-preference ) {
 	// Sweep a gradient band across with a compositor-driven transform (GPU) rather
 	// than animating background-position, which repaints every frame and stutters.

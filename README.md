@@ -8,7 +8,7 @@ You write a standard AG Grid `gridOptions` table in Lua and call one function. T
 
 - Author full AG Grid `gridOptions` in Lua; existing AG Grid knowledge carries straight over.
 - Clickable wikilinks, thumbnails, linked thumbnails, and link lists inside cells.
-- Sort, filter, quick-search, and CSV export all work on the underlying values.
+- Sort, filter (including a built-in **set filter**), quick-search, and CSV export all work on the underlying values.
 - Lazy-loads, and on saved pages serves rows from a cacheable REST endpoint.
 
 ## 📋 Requirements
@@ -81,6 +81,23 @@ What makes this safe and fast:
 - **Linking is a modifier, not a separate type.** Any cell value can carry an `href`, and the renderer wraps it in a link. That is how a thumbnail becomes a *linked* thumbnail: `aggrid.thumb( file, width, { link = ... } )`.
 - **Sorting and filtering use the text, not the markup.** Sort, filter, quick-search, and CSV export read each cell's underlying text (link text, alt text, joined list text), while the cell shows the rich content.
 - **Output is escaped by default.** Renderers build DOM with `textContent` and typed properties, never `innerHTML`, and only allow `http(s):`, root-relative, `./`, and `#` link targets.
+
+## 🔽 Set filter
+
+AG Grid Community has no built-in set filter (the checkbox list of a column's values), so AGGrid ships one. Enable it per column with `filter = 'aggridSet'`:
+
+```lua
+mw.ext.aggrid.render{
+    columnDefs = {
+        aggrid.linkColumn{ field = 'name', header = 'Name', filter = 'aggridSet' },
+        { field = 'type', headerName = 'Type', filter = 'aggridSet' },
+        { field = 'price', headerName = 'Price', filter = 'agNumberColumnFilter' },
+    },
+    rowData = rows,
+}
+```
+
+The popup lists each unique value with a row count, a search box for long lists, a tri-state "select all", and a `(Blanks)` entry for empty cells. On rich columns (`linkColumn`, `imageColumn`, `linkListColumn`) it filters on the displayed text, matching how sort and quick-search behave. The value list is taken from all loaded rows; it is not narrowed by other columns' active filters.
 
 ## 📖 Lua API (`mw.ext.aggrid`)
 

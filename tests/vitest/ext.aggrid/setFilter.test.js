@@ -131,4 +131,23 @@ describe( 'SetFilter GUI', () => {
 		expect( f.getModel() ).toEqual( { values: [] } );
 		expect( f.params.filterChangedCallback ).toHaveBeenCalled();
 	} );
+
+	// The visual checkbox state lives in ag-checked / ag-indeterminate on the wrapper "box"
+	// (AG Grid's theme draws it); the <input> only carries the logical state. Lock in that the
+	// two never drift, since that sync is the load-bearing detail of the native-styling markup.
+	it( 'keeps the AG Grid wrapper classes in sync with selection', () => {
+		const { gui } = mount( [ { s: 'a' }, { s: 'b' } ], ( d ) => d.s );
+		const valueBox = gui.querySelector( '.ext-aggrid-setfilter__item--value .ext-aggrid-setfilter__box' );
+		const allBox = gui.querySelector( '.ext-aggrid-setfilter__item--all .ext-aggrid-setfilter__box' );
+		// Initial: everything checked.
+		expect( valueBox.classList.contains( 'ag-checked' ) ).toBe( true );
+		expect( allBox.classList.contains( 'ag-checked' ) ).toBe( true );
+		// Uncheck one value: its box clears, select-all becomes indeterminate (not checked).
+		const cb = gui.querySelector( '.ext-aggrid-setfilter__item--value .ext-aggrid-setfilter__cb' );
+		cb.checked = false;
+		cb.dispatchEvent( new window.Event( 'change' ) );
+		expect( valueBox.classList.contains( 'ag-checked' ) ).toBe( false );
+		expect( allBox.classList.contains( 'ag-indeterminate' ) ).toBe( true );
+		expect( allBox.classList.contains( 'ag-checked' ) ).toBe( false );
+	} );
 } );
