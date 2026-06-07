@@ -1,4 +1,4 @@
-const { parseConfig, mountGrid } = require( '../../../modules/ext.aggrid/mountGrid.js' );
+const { parseConfig, mountGrid, applyFormatters } = require( '../../../modules/ext.aggrid/mountGrid.js' );
 
 function makeEl( json ) {
 	const el = document.createElement( 'div' );
@@ -463,5 +463,27 @@ describe( 'mountGrid', () => {
 		expect( opts.overlayNoRowsTemplate ).toContain( 'aggrid-error-load' );
 
 		delete global.mw.Rest;
+	} );
+} );
+
+describe( 'applyFormatters', () => {
+	it( 'installs a valueFormatter for colDefs carrying a format spec', () => {
+		const colDef = { field: 'len', format: { style: 'number', suffix: ' m' } };
+		applyFormatters( [ colDef ] );
+		expect( typeof colDef.valueFormatter ).toBe( 'function' );
+		expect( colDef.valueFormatter( { value: 1000 } ) ).toBe( '1,000 m' );
+	} );
+
+	it( 'does not clobber an explicit valueFormatter', () => {
+		const vf = () => 'x';
+		const colDef = { field: 'a', format: { style: 'number' }, valueFormatter: vf };
+		applyFormatters( [ colDef ] );
+		expect( colDef.valueFormatter ).toBe( vf );
+	} );
+
+	it( 'recurses into column-group children', () => {
+		const child = { field: 'c', format: { style: 'number' } };
+		applyFormatters( [ { headerName: 'Group', children: [ child ] } ] );
+		expect( typeof child.valueFormatter ).toBe( 'function' );
 	} );
 } );

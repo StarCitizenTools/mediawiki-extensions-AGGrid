@@ -3,6 +3,7 @@
 const { getWikiTheme } = require( './theme.js' );
 const { buildColumnTypes } = require( './renderers.js' );
 const { SetFilter } = require( './setFilter.js' );
+const { makeFormatter } = require( './format.js' );
 
 const PLACEHOLDER_SELECTOR = '.ext-aggrid';
 const CONFIG_ATTR = 'data-mw-aggrid-options';
@@ -65,6 +66,34 @@ function restPath( el ) {
 }
 
 /**
+ * Attach declarative valueFormatters: for each colDef carrying a `format` spec,
+ * install the matching Intl-backed formatter unless the author already set a
+ * valueFormatter. Recurses into column-group children. Applied on both the inline
+ * and backend paths via prepareGridOptions.
+ *
+ * @param {Array} colDefs gridOptions.columnDefs (or a group's children).
+ */
+function applyFormatters( colDefs ) {
+	if ( !Array.isArray( colDefs ) ) {
+		return;
+	}
+	colDefs.forEach( ( colDef ) => {
+		if ( !colDef || typeof colDef !== 'object' ) {
+			return;
+		}
+		if ( Array.isArray( colDef.children ) ) {
+			applyFormatters( colDef.children );
+		}
+		if ( colDef.format && !colDef.valueFormatter ) {
+			const formatter = makeFormatter( colDef.format );
+			if ( formatter ) {
+				colDef.valueFormatter = formatter;
+			}
+		}
+	} );
+}
+
+/**
  * Apply the built-in theme, column types and set-filter component to gridOptions,
  * and drop the loading skeleton/busy state from the container. Shared by the inline
  * and backend mount paths so both wire the built-ins identically.
@@ -77,6 +106,8 @@ function prepareGridOptions( el, gridOptions ) {
 	if ( !gridOptions.theme ) {
 		gridOptions.theme = getWikiTheme();
 	}
+	// Attach declarative valueFormatters from colDef.format specs.
+	applyFormatters( gridOptions.columnDefs );
 	// Register the built-in rich-cell column types (link/image/link-list). Built-ins
 	// win over author-supplied entries of the same reserved name — those can't carry
 	// the cellRenderer function across the JSON boundary anyway.
@@ -308,4 +339,4 @@ function mountAll( root ) {
 	);
 }
 
-module.exports = { parseConfig: parseConfig, mountGrid: mountGrid, mountAll: mountAll };
+module.exports = { parseConfig: parseConfig, mountGrid: mountGrid, mountAll: mountAll, applyFormatters: applyFormatters };
