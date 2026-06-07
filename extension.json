@@ -40,11 +40,11 @@
 		},
 		"linksupdate": {
 			"class": "MediaWiki\\Extension\\AGGrid\\Hooks\\LinksUpdateHandler",
-			"services": [ "AGGrid.InlineDataStore" ]
+			"services": [ "AGGrid.InlineDataStore", "AGGrid.SourceSpecStore" ]
 		},
 		"pagedelete": {
 			"class": "MediaWiki\\Extension\\AGGrid\\Hooks\\PageDeleteHandler",
-			"services": [ "AGGrid.InlineDataStore" ]
+			"services": [ "AGGrid.InlineDataStore", "AGGrid.SourceSpecStore" ]
 		}
 	},
 	"RestRoutes": [
@@ -54,6 +54,30 @@
 			"class": "MediaWiki\\Extension\\AGGrid\\Rest\\GridRowsHandler",
 			"services": [
 				"AGGrid.InlineDataStore",
+				"PermissionManager",
+				"TitleFactory",
+				"UserFactory"
+			]
+		},
+		{
+			"path": "/aggrid/v0/grid/{pageid}/{rev}/{index}/page",
+			"method": "GET",
+			"class": "MediaWiki\\Extension\\AGGrid\\Rest\\GridPageHandler",
+			"services": [
+				"AGGrid.DataSourceRegistry",
+				"AGGrid.SourceSpecStore",
+				"PermissionManager",
+				"TitleFactory",
+				"UserFactory"
+			]
+		},
+		{
+			"path": "/aggrid/v0/grid/{pageid}/{rev}/{index}/values",
+			"method": "GET",
+			"class": "MediaWiki\\Extension\\AGGrid\\Rest\\GridValuesHandler",
+			"services": [
+				"AGGrid.DataSourceRegistry",
+				"AGGrid.SourceSpecStore",
 				"PermissionManager",
 				"TitleFactory",
 				"UserFactory"
@@ -82,8 +106,17 @@
 				"aggrid-error-load",
 				"aggrid-setfilter-search-placeholder",
 				"aggrid-setfilter-select-all",
-				"aggrid-setfilter-blanks"
+				"aggrid-setfilter-blanks",
+				"aggrid-setfilter-loading",
+				"aggrid-setfilter-partial",
+				"aggrid-setfilter-values-error"
 			]
+		}
+	},
+	"config": {
+		"AGGridBackendCacheMaxAge": {
+			"value": 120,
+			"description": "Max-age (seconds) for backend-source grid REST responses (cursor pages and column values)."
 		}
 	},
 	"ForeignResourcesDir": "modules/lib",

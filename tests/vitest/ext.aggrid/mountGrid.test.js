@@ -175,6 +175,269 @@ describe( 'mountGrid', () => {
 		expect( opts.components.keep ).toEqual( { y: 2 } );
 	} );
 
+	function makeBackendEl( opts ) {
+		const el = makeHandleEl( opts );
+		el.setAttribute( 'data-mw-aggrid-source', 'smw' );
+		return el;
+	}
+
+	// Build an IGetRowsParams-shaped object with spy success/fail callbacks. The
+	// vendored v32 bundle invokes successCallback(rows, lastRow) / failCallback().
+	function makeRowsParams( over ) {
+		return Object.assign( {
+			startRow: 0,
+			endRow: 50,
+			sortModel: [],
+			filterModel: {},
+			successCallback: vi.fn(),
+			failCallback: vi.fn()
+		}, over );
+	}
+
+	function mockRest( get ) {
+		const RestMock = vi.fn();
+		RestMock.prototype.get = get;
+		global.mw.Rest = RestMock;
+	}
+
+	it( 'configures the Infinite Row Model with native pagination and a datasource.getRows', () => {
+		global.agGrid.createGrid = vi.fn();
+
+		const el = makeBackendEl( '{"columnDefs":[{"field":"name"}]}' );
+		mountGrid( el );
+
+		expect( global.agGrid.createGrid ).toHaveBeenCalledTimes( 1 );
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		expect( opts.rowModelType ).toBe( 'infinite' );
+		expect( opts.pagination ).toBe( true );
+		expect( opts.paginationPageSize ).toBe( 50 );
+		expect( opts.cacheBlockSize ).toBe( 50 );
+		expect( typeof opts.datasource.getRows ).toBe( 'function' );
+		// No rowData on the infinite path.
+		expect( opts.rowData ).toBeUndefined();
+	} );
+
+	it( 'fetches block 0 by offset/limit, then calls successCallback with the total', async () => {
+		global.agGrid.createGrid = vi.fn();
+
+		const get = vi.fn().mockResolvedValue( {
+			rows: [ { name: 'Aurora' } ], total: 137
+		} );
+		mockRest( get );
+
+		const el = makeBackendEl( '{"columnDefs":[{"field":"name"}]}' );
+		mountGrid( el );
+
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		// Native pagination bar; the page-size selector is disabled so the user
+		// can't desync paginationPageSize from cacheBlockSize (offset block mapping).
+		expect( opts.rowModelType ).toBe( 'infinite' );
+		expect( opts.pagination ).toBe( true );
+		expect( opts.paginationPageSizeSelector ).toBe( false );
+		expect( opts.paginationPageSize ).toBe( opts.cacheBlockSize );
+		const params = makeRowsParams( { startRow: 0, endRow: 50 } );
+		opts.datasource.getRows( params );
+
+		await new Promise( ( r ) => {
+			setTimeout( r, 0 );
+		} );
+
+		const url = get.mock.calls[ 0 ][ 0 ];
+		expect( url ).toContain( '/aggrid/v0/grid/7/42/0/page?' );
+		expect( url ).toContain( 'offset=0' );
+		expect( url ).toContain( 'size=50' );
+		expect( url ).not.toContain( 'cursor=' );
+		// total is passed as the absolute last row so the page bar shows all pages.
+		expect( params.successCallback ).toHaveBeenCalledWith( [ { name: 'Aurora' } ], 137 );
+		expect( params.failCallback ).not.toHaveBeenCalled();
+
+		delete global.mw.Rest;
+	} );
+
+	it( 'lets the author opt into infinite scroll with pagination=false', () => {
+		global.agGrid.createGrid = vi.fn();
+		mockRest( vi.fn().mockResolvedValue( { rows: [], total: 0 } ) );
+
+		const el = makeBackendEl( '{"columnDefs":[{"field":"n"}],"pagination":false}' );
+		mountGrid( el );
+
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		expect( opts.pagination ).toBe( false );
+		expect( opts.rowModelType ).toBe( 'infinite' );
+
+		delete global.mw.Rest;
+	} );
+
+	it( 'fails the block when the response has no numeric total', async () => {
+		global.agGrid.createGrid = vi.fn();
+		mockRest( vi.fn().mockResolvedValue( { rows: [ { n: 1 } ] } ) );
+
+		const el = makeBackendEl( '{"columnDefs":[{"field":"n"}]}' );
+		mountGrid( el );
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		const params = makeRowsParams( { startRow: 0, endRow: 50 } );
+		opts.datasource.getRows( params );
+		await new Promise( ( r ) => {
+			setTimeout( r, 0 );
+		} );
+
+		expect( params.successCallback ).not.toHaveBeenCalled();
+		expect( params.failCallback ).toHaveBeenCalled();
+
+		delete global.mw.Rest;
+	} );
+
+	it( 'requests the next block by its startRow offset', async () => {
+		global.agGrid.createGrid = vi.fn();
+
+		const get = vi.fn()
+			.mockResolvedValueOnce( { rows: [ { n: 1 } ], total: 200 } )
+			.mockResolvedValueOnce( { rows: [ { n: 2 } ], total: 200 } );
+		mockRest( get );
+
+		const el = makeBackendEl( '{"columnDefs":[{"field":"n"}]}' );
+		mountGrid( el );
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+
+		opts.datasource.getRows( makeRowsParams( { startRow: 0, endRow: 50 } ) );
+		await new Promise( ( r ) => {
+			setTimeout( r, 0 );
+		} );
+
+		opts.datasource.getRows( makeRowsParams( { startRow: 50, endRow: 100 } ) );
+		await new Promise( ( r ) => {
+			setTimeout( r, 0 );
+		} );
+
+		const url = get.mock.calls[ 1 ][ 0 ];
+		expect( url ).toContain( 'offset=50' );
+		expect( url ).toContain( 'size=50' );
+
+		delete global.mw.Rest;
+	} );
+
+	it( 'passes the server total as the absolute last row', async () => {
+		global.agGrid.createGrid = vi.fn();
+
+		const get = vi.fn().mockResolvedValue( {
+			rows: [ { n: 1 }, { n: 2 } ], total: 2
+		} );
+		mockRest( get );
+
+		const el = makeBackendEl( '{"columnDefs":[{"field":"n"}]}' );
+		mountGrid( el );
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+
+		const first = makeRowsParams( { startRow: 0, endRow: 50 } );
+		opts.datasource.getRows( first );
+		await new Promise( ( r ) => {
+			setTimeout( r, 0 );
+		} );
+		expect( first.successCallback ).toHaveBeenCalledWith( [ { n: 1 }, { n: 2 } ], 2 );
+
+		delete global.mw.Rest;
+	} );
+
+	it( 'serializes sortModel and filterModel into the /page request', async () => {
+		global.agGrid.createGrid = vi.fn();
+
+		const get = vi.fn().mockResolvedValue( { rows: [], total: 0 } );
+		mockRest( get );
+
+		const el = makeBackendEl( '{"columnDefs":[{"field":"Breed"}]}' );
+		mountGrid( el );
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+
+		opts.datasource.getRows( makeRowsParams( {
+			startRow: 0,
+			endRow: 50,
+			sortModel: [ { colId: 'Breed', sort: 'asc' } ],
+			filterModel: { Breed: { values: [ 'Collie' ] } }
+		} ) );
+		await new Promise( ( r ) => {
+			setTimeout( r, 0 );
+		} );
+
+		const url = decodeURIComponent( get.mock.calls[ 0 ][ 0 ] );
+		expect( url ).toContain( 'sort=' );
+		expect( url ).toContain( '"colId":"Breed"' );
+		expect( url ).toContain( 'filter=' );
+		expect( url ).toContain( '"values":["Collie"]' );
+
+		delete global.mw.Rest;
+	} );
+
+	it( 'gives aggridSet non-_subject columns a filterParams.valuesSource', async () => {
+		global.agGrid.createGrid = vi.fn();
+
+		// /values returns the real { key, label } object shape the SetFilter consumes.
+		const get = vi.fn().mockResolvedValue( {
+			values: [ { key: 'a', label: 'a' }, { key: 'b', label: 'b' } ],
+			partial: false
+		} );
+		mockRest( get );
+
+		const el = makeBackendEl(
+			'{"columnDefs":[' +
+			'{"field":"genre","filter":"aggridSet"},' +
+			'{"field":"_subject","filter":"aggridSet"}' +
+			']}'
+		);
+		mountGrid( el );
+
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		const genre = opts.columnDefs[ 0 ];
+		const subject = opts.columnDefs[ 1 ];
+		expect( typeof genre.filterParams.valuesSource ).toBe( 'function' );
+		expect( subject.filterParams ).toBeUndefined();
+
+		// Calling it GETs /values?column=<field> and resolves { values, partial }.
+		get.mockClear();
+		const result = await genre.filterParams.valuesSource();
+		expect( get ).toHaveBeenCalledWith( '/aggrid/v0/grid/7/42/0/values?column=genre' );
+		expect( result ).toEqual( {
+			values: [ { key: 'a', label: 'a' }, { key: 'b', label: 'b' } ],
+			partial: false
+		} );
+
+		delete global.mw.Rest;
+	} );
+
+	it( 'shows the error overlay for a backend source with an incomplete handle', () => {
+		global.agGrid.createGrid = vi.fn();
+
+		const el = makeEl( '{"columnDefs":[{"field":"name"}]}' );
+		el.setAttribute( 'data-mw-aggrid-source', 'smw' );
+
+		expect( () => mountGrid( el ) ).not.toThrow();
+		expect( global.agGrid.createGrid ).toHaveBeenCalledTimes( 1 );
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		expect( opts.rowData ).toEqual( [] );
+		expect( opts.overlayNoRowsTemplate ).toContain( 'aggrid-error-load' );
+	} );
+
+	it( 'fails the block when a backend page fetch rejects', async () => {
+		global.agGrid.createGrid = vi.fn();
+
+		const get = vi.fn().mockRejectedValue( new Error( 'network' ) );
+		mockRest( get );
+
+		const el = makeBackendEl( '{"columnDefs":[{"field":"name"}]}' );
+		mountGrid( el );
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+
+		const params = makeRowsParams( { startRow: 0, endRow: 50 } );
+		opts.datasource.getRows( params );
+		await new Promise( ( r ) => {
+			setTimeout( r, 0 );
+		} );
+
+		expect( params.failCallback ).toHaveBeenCalledTimes( 1 );
+		expect( params.successCallback ).not.toHaveBeenCalled();
+
+		delete global.mw.Rest;
+	} );
+
 	it( 'mounts an error overlay when the row fetch fails', async () => {
 		const get = vi.fn().mockRejectedValue( new Error( 'network' ) );
 		const RestMock = vi.fn();

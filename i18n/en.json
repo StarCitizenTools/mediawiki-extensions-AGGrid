@@ -8,5 +8,8 @@
 	"aggrid-error-load": "Could not load the grid data.",
 	"aggrid-setfilter-search-placeholder": "Search…",
 	"aggrid-setfilter-select-all": "(Select all)",
-	"aggrid-setfilter-blanks": "(Blanks)"
+	"aggrid-setfilter-blanks": "(Blanks)",
+	"aggrid-setfilter-loading": "Loading…",
+	"aggrid-setfilter-partial": "Showing partial values",
+	"aggrid-setfilter-values-error": "Could not load filter values."
 }
