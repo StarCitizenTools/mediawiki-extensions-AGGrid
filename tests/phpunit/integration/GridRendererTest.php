@@ -78,4 +78,121 @@ class GridRendererTest extends MediaWikiIntegrationTestCase {
 		$this->assertStringContainsString( 'ext-aggrid__skeleton', $html );
 		$this->assertStringContainsString( 'aria-hidden="true"', $html );
 	}
+
+	public function testInlineRenderHasNoSourceAttribute(): void {
+		$po = new ParserOutput();
+		$html = $this->getRenderer()->render( $this->options(), $po, 7, 42, false );
+		$this->assertStringNotContainsString( 'data-mw-aggrid-source', $html );
+	}
+
+	// -------------------------------------------------------------------------
+	// renderSource tests
+	// -------------------------------------------------------------------------
+
+	private function viewConfig(): array {
+		return [
+			'columnDefs' => [
+				1 => [ 'field' => '_subject' ],
+				2 => [ 'field' => 'Population' ],
+			],
+		];
+	}
+
+	private function spec(): array {
+		return [
+			'query' => '[[Category:Cities]]',
+			'printouts' => [ 'Population' ],
+			'mainlabel' => 'City',
+		];
+	}
+
+	public function testRenderSourceCanonicalParse(): void {
+		$po = new ParserOutput();
+		$spec = $this->spec();
+		$html = $this->getRenderer()->renderSource(
+			$this->viewConfig(), $spec, $po, 7, 42, false
+		);
+
+		// Source attribute present
+		$this->assertStringContainsString( 'data-mw-aggrid-source="smw"', $html );
+
+		// Handle attributes present
+		$this->assertStringContainsString( 'data-mw-aggrid-pageid="7"', $html );
+		$this->assertStringContainsString( 'data-mw-aggrid-rev="42"', $html );
+		$this->assertStringContainsString( 'data-mw-aggrid-index="0"', $html );
+
+		// No rowData in the options JSON
+		$decoded = $this->decodeOptions( $html );
+		$this->assertArrayNotHasKey( 'rowData', $decoded );
+		$this->assertArrayHasKey( 'columnDefs', $decoded );
+
+		// Extension data queued under SOURCE_EXT_DATA_KEY
+		$stored = $po->getExtensionData( GridRenderer::SOURCE_EXT_DATA_KEY . '0' );
+		$this->assertIsArray( $stored );
+		$this->assertSame( 'smw', $stored['source'] );
+		$this->assertSame( $spec, $stored['spec'] );
+		$this->assertSame( sha1( (string)json_encode( $spec ) ), $stored['hash'] );
+
+		// Nothing queued under inline key
+		$this->assertNull( $po->getExtensionData( GridRenderer::EXT_DATA_KEY . '0' ) );
+	}
+
+	public function testRenderSourceTwoCallsUseIndependentIndices(): void {
+		$po = new ParserOutput();
+		$spec = $this->spec();
+
+		$html0 = $this->getRenderer()->renderSource(
+			$this->viewConfig(), $spec, $po, 7, 42, false
+		);
+		$html1 = $this->getRenderer()->renderSource(
+			$this->viewConfig(), $spec, $po, 7, 42, false
+		);
+
+		$this->assertStringContainsString( 'data-mw-aggrid-index="0"', $html0 );
+		$this->assertStringContainsString( 'data-mw-aggrid-index="1"', $html1 );
+
+		$this->assertNotNull( $po->getExtensionData( GridRenderer::SOURCE_EXT_DATA_KEY . '0' ) );
+		$this->assertNotNull( $po->getExtensionData( GridRenderer::SOURCE_EXT_DATA_KEY . '1' ) );
+	}
+
+	public function testRenderSourceIndicesIndependentOfInlineGrids(): void {
+		$po = new ParserOutput();
+
+		// Queue an inline grid at index 0
+		$this->getRenderer()->render( $this->options(), $po, 7, 42, false );
+
+		// Source grids probe SOURCE_EXT_DATA_KEY, not EXT_DATA_KEY, so should start at 0
+		$html = $this->getRenderer()->renderSource(
+			$this->viewConfig(), $this->spec(), $po, 7, 42, false
+		);
+		$this->assertStringContainsString( 'data-mw-aggrid-index="0"', $html );
+		$this->assertNotNull( $po->getExtensionData( GridRenderer::SOURCE_EXT_DATA_KEY . '0' ) );
+	}
+
+	public function testRenderSourcePreviewHasSourceButNoHandle(): void {
+		$po = new ParserOutput();
+		$html = $this->getRenderer()->renderSource(
+			$this->viewConfig(), $this->spec(), $po, 7, 42, true
+		);
+
+		$this->assertStringContainsString( 'data-mw-aggrid-source="smw"', $html );
+		$this->assertStringNotContainsString( 'data-mw-aggrid-pageid', $html );
+		$this->assertStringNotContainsString( 'data-mw-aggrid-rev', $html );
+		$this->assertStringNotContainsString( 'data-mw-aggrid-index', $html );
+
+		// Nothing queued
+		$this->assertNull( $po->getExtensionData( GridRenderer::SOURCE_EXT_DATA_KEY . '0' ) );
+	}
+
+	public function testRenderSourceCustomSource(): void {
+		$po = new ParserOutput();
+		$html = $this->getRenderer()->renderSource(
+			$this->viewConfig(), $this->spec(), $po, 7, 42, false, 'custom'
+		);
+
+		$this->assertStringContainsString( 'data-mw-aggrid-source="custom"', $html );
+
+		$stored = $po->getExtensionData( GridRenderer::SOURCE_EXT_DATA_KEY . '0' );
+		$this->assertSame( 'custom', $stored['source'] );
+	}
 }

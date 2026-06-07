@@ -4,10 +4,14 @@ declare( strict_types=1 );
 
 namespace MediaWiki\Extension\AGGrid\Scribunto;
 
+use MediaWiki\Extension\AGGrid\DataSource\Smw\TypeColumnMapper;
 use MediaWiki\Extension\Scribunto\Engines\LuaCommon\LibraryBase;
 use MediaWiki\Extension\Scribunto\Engines\LuaCommon\LuaError;
 use MediaWiki\MediaWikiServices;
+use MediaWiki\Registration\ExtensionRegistry;
 use MediaWiki\Title\Title;
+use RuntimeException;
+use SMW\DIProperty;
 
 class LuaLibrary extends LibraryBase {
 
@@ -39,6 +43,11 @@ class LuaLibrary extends LibraryBase {
 	 */
 	public function render( $gridOptions = null ): array {
 		$this->checkType( 'mw.ext.aggrid.render', 1, $gridOptions, 'table' );
+
+		// A `source` descriptor routes to the backend path (query stored, not rows).
+		if ( isset( $gridOptions['source'] ) ) {
+			return $this->renderSource( $gridOptions );
+		}
 
 		if ( !isset( $gridOptions['columnDefs'] ) || !is_array( $gridOptions['columnDefs'] ) ) {
 			throw new LuaError( 'mw.ext.aggrid.render: "columnDefs" must be a table' );
@@ -77,6 +86,205 @@ class LuaLibrary extends LibraryBase {
 
 		// Strip marker keeps the parser from reprocessing the raw HTML.
 		return [ $parser->insertStripItem( $html ) ];
+	}
+
+	/**
+	 * Render a backend (SMW) source grid from a `source` descriptor.
+	 *
+	 * Auto-builds type-aware columnDefs from the SMW property datatypes and queues
+	 * the query SPEC (not rows) via GridRenderer::renderSource(). The columnDef
+	 * `field` for each printout equals the SMW PrintRequest label that
+	 * SmwDataSource emits, and the subject column uses the reserved `_subject` key.
+	 *
+	 * @param array $gridOptions gridOptions table carrying a `source` descriptor.
+	 * @return array
+	 * @throws LuaError If the descriptor is invalid or SMW is unavailable.
+	 */
+	private function renderSource( array $gridOptions ): array {
+		$source = $gridOptions['source'];
+		if ( !is_array( $source ) ) {
+			throw new LuaError( 'mw.ext.aggrid.render: source.type must be a non-empty string' );
+		}
+
+		$type = $source['type'] ?? null;
+		if ( !is_string( $type ) || trim( $type ) === '' ) {
+			throw new LuaError( 'mw.ext.aggrid.render: source.type must be a non-empty string' );
+		}
+		$type = trim( $type );
+		if ( $type !== 'smw' ) {
+			throw new LuaError( 'mw.ext.aggrid.render: unknown source type "' . $type . '"' );
+		}
+		if ( !ExtensionRegistry::getInstance()->isLoaded( 'SemanticMediaWiki' ) ) {
+			throw new LuaError(
+				'mw.ext.aggrid.render: source type "smw" requires the Semantic MediaWiki extension'
+			);
+		}
+
+		$queryString = $this->buildQueryString( $source['query'] ?? null );
+		$printouts = $this->parsePrintouts( $source['printouts'] ?? null );
+
+		$mapper = new TypeColumnMapper();
+		$columnDefs = [];
+		$canonicalPrintouts = [];
+		// field (the AG Grid colId / PrintRequest label) -> real SMW property name.
+		// SmwDataSource resolves a column's property through this map so an aliased
+		// printout ('Has population=Pop') sorts/filters on the property, not the alias.
+		$fieldToProp = [];
+
+		foreach ( $printouts as [ $prop, $label ] ) {
+			// newFromUserLabel returns null on some malformed labels and throws on
+			// others (e.g. a bare underscore); treat both as an invalid property.
+			try {
+				$property = DIProperty::newFromUserLabel( $prop );
+			} catch ( RuntimeException ) {
+				throw new LuaError( 'mw.ext.aggrid.render: invalid property "' . $prop . '"' );
+			}
+			if ( $property === null ) {
+				throw new LuaError( 'mw.ext.aggrid.render: invalid property "' . $prop . '"' );
+			}
+			$typeId = $property->findPropertyValueType();
+			// field MUST equal the column key SmwDataSource emits (the PrintRequest label).
+			$colDef = $mapper->mapColumn( $label, $label, $typeId );
+			$columnDefs[] = $colDef;
+			// Stored printout must yield the same label: "prop=label" unless label === prop.
+			$canonicalPrintouts[] = $label !== $prop ? $prop . '=' . $label : $prop;
+			// Record the field->property mapping (label == prop for non-aliased columns).
+			$fieldToProp[$label] = $prop;
+		}
+
+		// Subject (page) column, prepended unless mainlabel suppresses it ('-').
+		$mainlabel = $source['mainlabel'] ?? null;
+		$mainlabelIsString = is_string( $mainlabel );
+		if ( !$mainlabelIsString || $mainlabel !== '-' ) {
+			$header = ( $mainlabelIsString && trim( $mainlabel ) !== '' && $mainlabel !== '-' )
+				? $mainlabel
+				: 'Page';
+			array_unshift( $columnDefs, [
+				'field' => '_subject',
+				'headerName' => $header,
+				'type' => 'aggridLink',
+				// The subject is not a filterable property in v1.
+				'filter' => false,
+			] );
+		}
+
+		// Pass through any AG-Grid options the author set alongside `source`, then
+		// override columnDefs with the auto-built array (and drop rowData entirely).
+		$viewConfig = $gridOptions;
+		unset( $viewConfig['source'], $viewConfig['columnDefs'], $viewConfig['rowData'] );
+		$viewConfig['columnDefs'] = $columnDefs;
+
+		$spec = [
+			'query' => $queryString,
+			'printouts' => $canonicalPrintouts,
+			'mainlabel' => $mainlabelIsString ? $mainlabel : null,
+			'fields' => $fieldToProp,
+		];
+
+		$parser = $this->getParser();
+		$parserOutput = $parser->getOutput();
+		$parserOutput->addModules( [ 'ext.aggrid' ] );
+		$parserOutput->addModuleStyles( [ 'ext.aggrid.styles' ] );
+
+		$title = $parser->getTitle();
+		$pageId = $title->getArticleID();
+		$revId = $parser->getRevisionId() ?: $title->getLatestRevID();
+		$isPreview = $parser->getOptions()->getIsPreview();
+
+		$html = MediaWikiServices::getInstance()
+			->getService( 'AGGrid.GridRenderer' )
+			->renderSource(
+				$viewConfig,
+				$spec,
+				$parserOutput,
+				$pageId ?: null,
+				$revId ?: null,
+				$isPreview,
+				'smw'
+			);
+
+		return [ $parser->insertStripItem( $html ) ];
+	}
+
+	/**
+	 * Normalize a query descriptor into a single trimmed query string.
+	 *
+	 * Accepts a string or a Lua sequence of condition fragments (joined by spaces).
+	 *
+	 * @param mixed $query
+	 * @return string
+	 * @throws LuaError If the result is empty.
+	 */
+	private function buildQueryString( $query ): string {
+		if ( is_string( $query ) ) {
+			$queryString = trim( $query );
+		} elseif ( is_array( $query ) ) {
+			$fragments = [];
+			foreach ( $query as $fragment ) {
+				if ( is_string( $fragment ) && trim( $fragment ) !== '' ) {
+					$fragments[] = trim( $fragment );
+				}
+			}
+			$queryString = implode( ' ', $fragments );
+		} else {
+			$queryString = '';
+		}
+
+		if ( $queryString === '' ) {
+			throw new LuaError(
+				'mw.ext.aggrid.render: source.query must be a non-empty string or list of fragments'
+			);
+		}
+
+		return $queryString;
+	}
+
+	/**
+	 * Parse the printouts descriptor into a list of [ prop, label ] pairs.
+	 *
+	 * Entries may be a plain string ('Population'), a 'prop=label' string, or a
+	 * table { prop = ..., label = ... }.
+	 *
+	 * @param mixed $printouts
+	 * @return array<int, array{0: string, 1: string}>
+	 * @throws LuaError If empty or an entry lacks a property name.
+	 */
+	private function parsePrintouts( $printouts ): array {
+		if ( !is_array( $printouts ) || $printouts === [] ) {
+			throw new LuaError(
+				'mw.ext.aggrid.render: source.printouts must list at least one property'
+			);
+		}
+
+		$parsed = [];
+		foreach ( $printouts as $entry ) {
+			if ( is_string( $entry ) ) {
+				if ( strpos( $entry, '=' ) !== false ) {
+					[ $prop, $label ] = explode( '=', $entry, 2 );
+					$prop = trim( $prop );
+					$label = trim( $label );
+				} else {
+					$prop = trim( $entry );
+					$label = $prop;
+				}
+			} elseif ( is_array( $entry ) ) {
+				$prop = isset( $entry['prop'] ) ? trim( (string)$entry['prop'] ) : '';
+				$label = isset( $entry['label'] ) ? trim( (string)$entry['label'] ) : $prop;
+			} else {
+				$prop = '';
+				$label = '';
+			}
+
+			if ( $prop === '' ) {
+				throw new LuaError( 'mw.ext.aggrid.render: each printout needs a property name' );
+			}
+			if ( $label === '' ) {
+				$label = $prop;
+			}
+			$parsed[] = [ $prop, $label ];
+		}
+
+		return $parsed;
 	}
 
 	/**

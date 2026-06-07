@@ -8,6 +8,7 @@ use MediaWiki\Deferred\LinksUpdate\LinksUpdate;
 use MediaWiki\Extension\AGGrid\Hooks\LinksUpdateHandler;
 use MediaWiki\Extension\AGGrid\Service\GridDataStore;
 use MediaWiki\Extension\AGGrid\Service\GridRenderer;
+use MediaWiki\Extension\AGGrid\Service\SourceSpecStore;
 use MediaWiki\Parser\ParserOutput;
 use MediaWikiUnitTestCase;
 
@@ -34,7 +35,10 @@ class LinksUpdateHandlerTest extends MediaWikiUnitTestCase {
 			]
 		);
 
-		( new LinksUpdateHandler( $store ) )->onLinksUpdateComplete( $linksUpdate, false );
+		$sourceStore = $this->createMock( SourceSpecStore::class );
+		$sourceStore->expects( $this->once() )->method( 'replaceForPage' )->with( 100, [] );
+
+		( new LinksUpdateHandler( $store, $sourceStore ) )->onLinksUpdateComplete( $linksUpdate, false );
 	}
 
 	public function testNoGridsStillClearsThePage(): void {
@@ -45,7 +49,10 @@ class LinksUpdateHandlerTest extends MediaWikiUnitTestCase {
 		$store = $this->createMock( GridDataStore::class );
 		$store->expects( $this->once() )->method( 'replaceForPage' )->with( 100, [] );
 
-		( new LinksUpdateHandler( $store ) )->onLinksUpdateComplete( $linksUpdate, false );
+		$sourceStore = $this->createMock( SourceSpecStore::class );
+		$sourceStore->expects( $this->once() )->method( 'replaceForPage' )->with( 100, [] );
+
+		( new LinksUpdateHandler( $store, $sourceStore ) )->onLinksUpdateComplete( $linksUpdate, false );
 	}
 
 	public function testSkipsPagesWithNoId(): void {
@@ -55,6 +62,31 @@ class LinksUpdateHandlerTest extends MediaWikiUnitTestCase {
 		$store = $this->createMock( GridDataStore::class );
 		$store->expects( $this->never() )->method( 'replaceForPage' );
 
-		( new LinksUpdateHandler( $store ) )->onLinksUpdateComplete( $linksUpdate, false );
+		$sourceStore = $this->createMock( SourceSpecStore::class );
+		$sourceStore->expects( $this->never() )->method( 'replaceForPage' );
+
+		( new LinksUpdateHandler( $store, $sourceStore ) )->onLinksUpdateComplete( $linksUpdate, false );
+	}
+
+	public function testFlushesSourceGridsToSourceStore(): void {
+		$sourceGrid = [ 'source' => 'smw', 'spec' => [ 'query' => '[[Category:Foo]]' ], 'hash' => 'sh0' ];
+
+		$po = new ParserOutput();
+		$po->setExtensionData( GridRenderer::SOURCE_EXT_DATA_KEY . '0', $sourceGrid );
+
+		$linksUpdate = $this->createMock( LinksUpdate::class );
+		$linksUpdate->method( 'getPageId' )->willReturn( 200 );
+		$linksUpdate->method( 'getParserOutput' )->willReturn( $po );
+
+		$store = $this->createMock( GridDataStore::class );
+		$store->expects( $this->once() )->method( 'replaceForPage' )->with( 200, [] );
+
+		$sourceStore = $this->createMock( SourceSpecStore::class );
+		$sourceStore->expects( $this->once() )->method( 'replaceForPage' )->with(
+			200,
+			[ 0 => $sourceGrid ]
+		);
+
+		( new LinksUpdateHandler( $store, $sourceStore ) )->onLinksUpdateComplete( $linksUpdate, false );
 	}
 }
