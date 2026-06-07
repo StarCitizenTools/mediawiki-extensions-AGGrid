@@ -7,8 +7,8 @@ namespace MediaWiki\Extension\AGGrid\Hooks;
 use MediaWiki\Installer\Hook\LoadExtensionSchemaUpdatesHook;
 
 /**
- * Installs the aggrid_data table. Runs in the installer context, so it must not
- * depend on services.
+ * Installs the aggrid_data and aggrid_source tables. Runs in the installer context,
+ * so it must not depend on services.
  */
 final class SchemaHandler implements LoadExtensionSchemaUpdatesHook {
 
@@ -17,9 +17,8 @@ final class SchemaHandler implements LoadExtensionSchemaUpdatesHook {
 	 */
 	public function onLoadExtensionSchemaUpdates( $updater ) {
 		$type = $updater->getDB()->getType();
-		$updater->addExtensionTable(
-			'aggrid_data',
-			dirname( __DIR__, 2 ) . "/sql/$type/tables-generated.sql"
-		);
+		$sqlDir = dirname( __DIR__, 2 ) . "/sql/$type";
+		$updater->addExtensionTable( 'aggrid_data', "$sqlDir/tables-generated.sql" );
+		$updater->addExtensionTable( 'aggrid_source', "$sqlDir/patch-aggrid_source.sql" );
 	}
 }

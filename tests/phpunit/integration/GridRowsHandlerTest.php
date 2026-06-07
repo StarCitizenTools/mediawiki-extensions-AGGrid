@@ -25,7 +25,7 @@ class GridRowsHandlerTest extends MediaWikiIntegrationTestCase {
 	 */
 	protected function getSchemaOverrides( IMaintainableDatabase $db ) {
 		return [
-			'create' => [ 'aggrid_data' ],
+			'create' => [ 'aggrid_data', 'aggrid_source' ],
 			'scripts' => [ dirname( __DIR__, 3 ) . '/sql/' . $db->getType() . '/tables-generated.sql' ],
 		];
 	}
