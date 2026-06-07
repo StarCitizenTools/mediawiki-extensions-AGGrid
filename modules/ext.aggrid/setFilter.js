@@ -24,6 +24,12 @@ function keyOf( v ) {
 	return isBlank( v ) ? BLANK_KEY : String( v );
 }
 
+// Compare two display labels for the value list: natural, case-insensitive,
+// number-aware alphabetical order (so "Item 2" sorts before "Item 10").
+function compareLabels( a, b ) {
+	return a.localeCompare( b, undefined, { numeric: true, sensitivity: 'base' } );
+}
+
 /**
  * Walk all loaded leaf rows and tally unique display values for a column.
  *
@@ -96,24 +102,36 @@ SetFilter.prototype.initServerBacked = function ( valuesSource ) {
 			loading.parentNode.removeChild( loading );
 		}
 
+		// Normalise to { key, label } and sort alphabetically by label. When the
+		// server caps the set (partial), this alphabetises an arbitrary truncated
+		// slice — the values are still incomplete; the partial note below says so.
+		const sorted = values.map( ( v ) => {
+			const key = String( v.key );
+			return {
+				key: key,
+				label: v.label !== undefined && v.label !== null ? String( v.label ) : key
+			};
+		} );
+		sorted.sort( ( a, b ) => compareLabels( a.label, b.label ) );
+
 		// Build the counts map: key → null (counts unknown from server).
 		this.counts = new Map();
-		values.forEach( ( v ) => {
-			this.counts.set( String( v.key ), null );
+		sorted.forEach( ( v ) => {
+			this.counts.set( v.key, null );
 		} );
-		this.allKeys = values.map( ( v ) => String( v.key ) );
+		this.allKeys = sorted.map( ( v ) => v.key );
 		this.selected = new Set( this.allKeys );
 
 		// Populate the list with server-provided values.
 		this.items = [];
-		values.forEach( ( v ) => {
-			const key = String( v.key );
-			const label = v.label !== undefined && v.label !== null ? String( v.label ) : key;
-			const cb = makeItemCheckbox( label );
-			cb.input.addEventListener( 'change', () => this.onToggle( key, cb.input.checked ) );
+		sorted.forEach( ( v ) => {
+			const cb = makeItemCheckbox( v.label );
+			cb.input.addEventListener( 'change', () => this.onToggle( v.key, cb.input.checked ) );
 			// Pass null for count so no count suffix is rendered.
 			const row = this.buildRow( 'ext-aggrid-setfilter__item--value', cb, null );
-			this.items.push( { key: key, label: label, row: row, box: cb.wrapper, input: cb.input } );
+			this.items.push(
+				{ key: v.key, label: v.label, row: row, box: cb.wrapper, input: cb.input }
+			);
 			list.appendChild( row );
 		} );
 
@@ -263,13 +281,32 @@ SetFilter.prototype.buildGui = function () {
 		() => this.onSelectAll( this.selectAll.input.checked ) );
 	list.appendChild( this.buildRow( 'ext-aggrid-setfilter__item--all', this.selectAll, null ) );
 
-	// One row per value.
+	// One row per value, sorted alphabetically by label; the blanks bucket is
+	// pinned last (its position should not depend on the blanks message wording).
+	const values = [];
 	this.counts.forEach( ( count, key ) => {
-		const label = key === BLANK_KEY ? mw.msg( 'aggrid-setfilter-blanks' ) : key;
-		const cb = makeItemCheckbox( label );
-		cb.input.addEventListener( 'change', () => this.onToggle( key, cb.input.checked ) );
-		const row = this.buildRow( 'ext-aggrid-setfilter__item--value', cb, count );
-		this.items.push( { key: key, label: label, row: row, box: cb.wrapper, input: cb.input } );
+		values.push( {
+			key: key,
+			count: count,
+			label: key === BLANK_KEY ? mw.msg( 'aggrid-setfilter-blanks' ) : key
+		} );
+	} );
+	values.sort( ( a, b ) => {
+		if ( a.key === BLANK_KEY ) {
+			return b.key === BLANK_KEY ? 0 : 1;
+		}
+		if ( b.key === BLANK_KEY ) {
+			return -1;
+		}
+		return compareLabels( a.label, b.label );
+	} );
+	values.forEach( ( v ) => {
+		const cb = makeItemCheckbox( v.label );
+		cb.input.addEventListener( 'change', () => this.onToggle( v.key, cb.input.checked ) );
+		const row = this.buildRow( 'ext-aggrid-setfilter__item--value', cb, v.count );
+		this.items.push(
+			{ key: v.key, label: v.label, row: row, box: cb.wrapper, input: cb.input }
+		);
 		list.appendChild( row );
 	} );
 
