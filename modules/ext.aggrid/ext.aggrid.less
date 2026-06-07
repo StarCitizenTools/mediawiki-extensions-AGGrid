@@ -78,6 +78,48 @@
 	opacity: 0.7;
 }
 
+// Layout only — every badge always carries a variant modifier (badgeVariant() never
+// returns empty), so colour and background live solely on the --variant rules below.
+.ext-aggrid__badge {
+	display: inline-block;
+	padding: 1px 8px;
+	font-size: 0.85em;
+	font-weight: bold;
+	line-height: 1.5;
+	white-space: nowrap;
+	border-radius: 12px;
+}
+
+.ext-aggrid__badge--neutral {
+	color: @color-subtle;
+	background-color: @background-color-neutral-subtle;
+}
+
+.ext-aggrid__badge--success {
+	color: @color-success;
+	background-color: @background-color-success-subtle;
+}
+
+.ext-aggrid__badge--warning {
+	color: @color-warning;
+	background-color: @background-color-warning-subtle;
+}
+
+.ext-aggrid__badge--error {
+	color: @color-error;
+	background-color: @background-color-error-subtle;
+}
+
+.ext-aggrid__badge--notice {
+	color: @color-notice;
+	background-color: @background-color-notice-subtle;
+}
+
+.ext-aggrid__badge--info {
+	color: @color-progressive;
+	background-color: @background-color-progressive-subtle;
+}
+
 @media ( prefers-reduced-motion: no-preference ) {
 	// Sweep a gradient band across with a compositor-driven transform (GPU) rather
 	// than animating background-position, which repaints every frame and stutters.
