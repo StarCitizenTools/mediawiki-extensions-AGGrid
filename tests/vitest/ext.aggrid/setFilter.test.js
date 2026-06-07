@@ -120,6 +120,43 @@ describe( 'SetFilter GUI', () => {
 		expect( gui.textContent ).toContain( 'aggrid-setfilter-blanks' );
 	} );
 
+	// Helper: the value-label text of each rendered row, in DOM order.
+	function valueLabels( gui ) {
+		return Array.from(
+			gui.querySelectorAll( '.ext-aggrid-setfilter__item--value .ext-aggrid-setfilter__text' )
+		).map( ( el ) => el.textContent );
+	}
+
+	it( 'sorts value labels alphabetically regardless of row order', () => {
+		const { gui } = mount(
+			[ { s: 'banana' }, { s: 'apple' }, { s: 'cherry' } ], ( d ) => d.s
+		);
+		expect( valueLabels( gui ) ).toEqual( [ 'apple', 'banana', 'cherry' ] );
+	} );
+
+	it( 'sorts numerically (natural order), not lexically', () => {
+		const { gui } = mount(
+			[ { s: 'Item 10' }, { s: 'Item 2' }, { s: 'Item 1' } ], ( d ) => d.s
+		);
+		expect( valueLabels( gui ) ).toEqual( [ 'Item 1', 'Item 2', 'Item 10' ] );
+	} );
+
+	it( 'is case-insensitive when sorting', () => {
+		const { gui } = mount(
+			[ { s: 'Banana' }, { s: 'apple' }, { s: 'Cherry' } ], ( d ) => d.s
+		);
+		expect( valueLabels( gui ) ).toEqual( [ 'apple', 'Banana', 'Cherry' ] );
+	} );
+
+	it( 'pins the blanks bucket last', () => {
+		const { gui } = mount(
+			[ { s: 'b' }, { s: '' }, { s: 'a' } ], ( d ) => d.s
+		);
+		const labels = valueLabels( gui );
+		expect( labels[ labels.length - 1 ] ).toBe( 'aggrid-setfilter-blanks' );
+		expect( labels.slice( 0, -1 ) ).toEqual( [ 'a', 'b' ] );
+	} );
+
 	it( 'search hides non-matching rows without changing selection', () => {
 		const { f, gui } = mount( [ { s: 'apple' }, { s: 'banana' } ], ( d ) => d.s );
 		const search = gui.querySelector( '.ext-aggrid-setfilter__search' );
@@ -225,6 +262,43 @@ describe( 'SetFilter server-backed', () => {
 		expect( rows.length ).toBe( 2 );
 		expect( rows[ 0 ].textContent ).toContain( 'A' );
 		expect( rows[ 1 ].textContent ).toContain( 'B' );
+	} );
+
+	it( 'sorts server-backed value labels alphabetically', async () => {
+		const params = makeServerParams( () => Promise.resolve( {
+			// Sort by label, not key: keys are out of label order on purpose.
+			values: [
+				{ key: '3', label: 'cherry' },
+				{ key: '1', label: 'apple' },
+				{ key: '2', label: 'banana' }
+			],
+			partial: false
+		} ) );
+		const f = new SetFilter();
+		f.init( params );
+		await tick();
+
+		const gui = f.getGui();
+		const labels = Array.from(
+			gui.querySelectorAll( '.ext-aggrid-setfilter__item--value .ext-aggrid-setfilter__text' )
+		).map( ( el ) => el.textContent );
+		expect( labels ).toEqual( [ 'apple', 'banana', 'cherry' ] );
+	} );
+
+	it( 'falls back to the key as label and sorts by it when label is missing', async () => {
+		const params = makeServerParams( () => Promise.resolve( {
+			values: [ { key: 'banana' }, { key: 'apple', label: 'apple' }, { key: 'cherry' } ],
+			partial: false
+		} ) );
+		const f = new SetFilter();
+		f.init( params );
+		await tick();
+
+		const gui = f.getGui();
+		const labels = Array.from(
+			gui.querySelectorAll( '.ext-aggrid-setfilter__item--value .ext-aggrid-setfilter__text' )
+		).map( ( el ) => el.textContent );
+		expect( labels ).toEqual( [ 'apple', 'banana', 'cherry' ] );
 	} );
 
 	it( 'server-backed rows show no (count) suffix', async () => {
