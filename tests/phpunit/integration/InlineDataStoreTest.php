@@ -19,7 +19,7 @@ class InlineDataStoreTest extends MediaWikiIntegrationTestCase {
 	 */
 	protected function getSchemaOverrides( IMaintainableDatabase $db ) {
 		return [
-			'create' => [ 'aggrid_data', 'aggrid_source' ],
+			'create' => [ 'aggrid_data' ],
 			'scripts' => [ dirname( __DIR__, 3 ) . '/sql/' . $db->getType() . '/tables-generated.sql' ],
 		];
 	}

@@ -12,6 +12,7 @@ use MediaWiki\Parser\Parser;
 use MediaWiki\Parser\ParserOptions;
 use MediaWiki\Registration\ExtensionRegistry;
 use MediaWikiIntegrationTestCase;
+use Wikimedia\Rdbms\IMaintainableDatabase;
 
 /**
  * @covers \MediaWiki\Extension\AGGrid\Scribunto\LuaLibrary
@@ -24,6 +25,16 @@ class LuaLibrarySourceTest extends MediaWikiIntegrationTestCase {
 		if ( !ExtensionRegistry::getInstance()->isLoaded( 'SemanticMediaWiki' ) ) {
 			$this->markTestSkipped( 'Semantic MediaWiki is required for the source path tests.' );
 		}
+	}
+
+	protected function getSchemaOverrides( IMaintainableDatabase $db ) {
+		// Saving a page fires LinksUpdateComplete, which flushes both the inline
+		// (aggrid_data) and backend (aggrid_source) stores, so both tables must exist.
+		$dir = dirname( __DIR__, 3 ) . '/sql/' . $db->getType();
+		return [
+			'create' => [ 'aggrid_data', 'aggrid_source' ],
+			'scripts' => [ "$dir/tables-generated.sql", "$dir/patch-aggrid_source.sql" ],
+		];
 	}
 
 	public function testValidSmwSourceQueuesSpecAndBuildsColumns(): void {

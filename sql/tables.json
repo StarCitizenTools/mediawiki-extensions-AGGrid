@@ -11,18 +11,5 @@
 		],
 		"indexes": [],
 		"pk": [ "agd_page_id", "agd_grid_index" ]
-	},
-	{
-		"name": "aggrid_source",
-		"comment": "One row per backend-source grid placeholder: the stored query spec (not rows). Source-neutral; ags_spec is opaque and interpreted only by the matching DataSource.",
-		"columns": [
-			{ "name": "ags_page_id", "comment": "page.page_id the grid lives on", "type": "integer", "options": { "unsigned": true, "notnull": true } },
-			{ "name": "ags_grid_index", "comment": "0-based ordinal of the grid within the page parse", "type": "integer", "options": { "unsigned": true, "notnull": true } },
-			{ "name": "ags_source", "comment": "source type discriminator, e.g. 'smw'", "type": "binary", "options": { "notnull": true, "length": 32 } },
-			{ "name": "ags_spec", "comment": "opaque query spec as JSON", "type": "blob", "options": { "notnull": true, "length": 16777215 } },
-			{ "name": "ags_hash", "comment": "sha1 of the spec (40 hex chars), for skip-on-unchanged re-parse", "type": "binary", "options": { "notnull": true, "length": 40, "fixed": true } }
-		],
-		"indexes": [],
-		"pk": [ "ags_page_id", "ags_grid_index" ]
 	}
 ]

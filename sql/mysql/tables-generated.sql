@@ -10,13 +10,3 @@ CREATE TABLE /*_*/aggrid_data (
   agd_hash BINARY(40) NOT NULL,
   PRIMARY KEY(agd_page_id, agd_grid_index)
 ) /*$wgDBTableOptions*/;
-
-
-CREATE TABLE /*_*/aggrid_source (
-  ags_page_id INT UNSIGNED NOT NULL,
-  ags_grid_index INT UNSIGNED NOT NULL,
-  ags_source VARBINARY(32) NOT NULL,
-  ags_spec MEDIUMBLOB NOT NULL,
-  ags_hash BINARY(40) NOT NULL,
-  PRIMARY KEY(ags_page_id, ags_grid_index)
-) /*$wgDBTableOptions*/;

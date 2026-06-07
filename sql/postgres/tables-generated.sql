@@ -10,13 +10,3 @@ CREATE TABLE aggrid_data (
   agd_hash TEXT NOT NULL,
   PRIMARY KEY(agd_page_id, agd_grid_index)
 );
-
-
-CREATE TABLE aggrid_source (
-  ags_page_id INT NOT NULL,
-  ags_grid_index INT NOT NULL,
-  ags_source TEXT NOT NULL,
-  ags_spec TEXT NOT NULL,
-  ags_hash TEXT NOT NULL,
-  PRIMARY KEY(ags_page_id, ags_grid_index)
-);
