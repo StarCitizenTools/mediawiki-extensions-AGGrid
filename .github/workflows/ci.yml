@@ -82,6 +82,7 @@ jobs:
       project-type: extension
       project-name: AGGrid
       extra-extensions: Scribunto
+      extra-composer-packages: mediawiki/semantic-media-wiki
       runner: ubuntu-24.04-arm
 
   test-js:
