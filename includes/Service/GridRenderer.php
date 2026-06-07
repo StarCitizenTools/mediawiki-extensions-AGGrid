@@ -16,6 +16,10 @@ use MediaWiki\Parser\ParserOutput;
  * LinksUpdateHandler); the placeholder carries only a handle the client uses to
  * fetch the rows. On preview the rows are embedded inline so unsaved edits still
  * render via the client-side row model.
+ *
+ * For backend (e.g. SMW) source grids, a query spec is queued instead of rows
+ * (flushed to aggrid_source by LinksUpdateHandler in a separate pass); the
+ * placeholder carries a data-mw-aggrid-source attribute plus the same handle.
  */
 final class GridRenderer {
 
@@ -26,6 +30,12 @@ final class GridRenderer {
 	 * LinksUpdateHandler reads them by probing indices 0,1,2,… until null.
 	 */
 	public const EXT_DATA_KEY = 'ext-aggrid-grid-';
+
+	/**
+	 * Prefix for per-source-grid extension-data keys. Probed independently of
+	 * EXT_DATA_KEY so inline and backend grids never collide on index numbering.
+	 */
+	public const SOURCE_EXT_DATA_KEY = 'ext-aggrid-source-';
 
 	public function __construct(
 		private readonly TemplateParser $templateParser
@@ -51,7 +61,7 @@ final class GridRenderer {
 
 		// Preview / unknown page: embed inline so the (possibly unsaved) data renders.
 		if ( $isPreview || !$pageId || !$revId ) {
-			return $this->buildPlaceholder( $gridOptions, null );
+			return $this->buildPlaceholder( $gridOptions, null, null );
 		}
 
 		$rows = $gridOptions['rowData'] ?? [];
@@ -71,19 +81,73 @@ final class GridRenderer {
 			'pageid' => $pageId,
 			'rev' => $revId,
 			'index' => $index,
+		], null );
+	}
+
+	/**
+	 * Render a placeholder for a backend-source grid (e.g. SMW query).
+	 *
+	 * On a canonical parse the query spec is queued in ParserOutput extension
+	 * data under SOURCE_EXT_DATA_KEY; the placeholder carries data-mw-aggrid-source
+	 * plus a handle. On preview (or unknown page) only the source attribute is
+	 * emitted — the client shows an unsupported overlay since there is no stored
+	 * spec to fetch.
+	 *
+	 * @param array $viewConfig AG Grid gridOptions without rowData (columnDefs etc.)
+	 * @param array $spec Opaque query spec (e.g. { query, printouts, mainlabel }).
+	 * @param ParserOutput $parserOutput Parse to queue spec into.
+	 * @param int|null $pageId Page id, or null when unknown (new/unsaved page).
+	 * @param int|null $revId Revision id, or null when unknown.
+	 * @param bool $isPreview Whether this is a preview parse.
+	 * @param string $source Source identifier (default: 'smw').
+	 * @return string HTML placeholder.
+	 */
+	public function renderSource(
+		array $viewConfig,
+		array $spec,
+		ParserOutput $parserOutput,
+		?int $pageId,
+		?int $revId,
+		bool $isPreview,
+		string $source = 'smw'
+	): string {
+		$viewConfig = LuaSequence::normalize( $viewConfig );
+
+		// Preview / unknown page: no stored spec to fetch; emit source attr but no handle.
+		if ( $isPreview || !$pageId || !$revId ) {
+			return $this->buildPlaceholder( $viewConfig, null, $source );
+		}
+
+		// Find the next free source-grid key; probed independently of EXT_DATA_KEY.
+		$index = 0;
+		while ( $parserOutput->getExtensionData( self::SOURCE_EXT_DATA_KEY . $index ) !== null ) {
+			$index++;
+		}
+		$parserOutput->setExtensionData( self::SOURCE_EXT_DATA_KEY . $index, [
+			'source' => $source,
+			'spec' => $spec,
+			'hash' => sha1( (string)json_encode( $spec ) ),
 		] );
+
+		return $this->buildPlaceholder( $viewConfig, [
+			'pageid' => $pageId,
+			'rev' => $revId,
+			'index' => $index,
+		], $source );
 	}
 
 	/**
 	 * @param array $viewConfig gridOptions for the attribute (rowData omitted when fetched).
-	 * @param array|null $handle [ 'pageid' => int, 'rev' => int, 'index' => int ] or null to embed.
+	 * @param array|null $handle [ 'pageid' => int, 'rev' => int, 'index' => int ] or null.
+	 * @param string|null $source Source identifier, or null for inline grids.
 	 * @return string
 	 */
-	private function buildPlaceholder( array $viewConfig, ?array $handle ): string {
+	private function buildPlaceholder( array $viewConfig, ?array $handle, ?string $source ): string {
 		$json = json_encode( $viewConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
 		return $this->templateParser->processTemplate( 'grid', [
 			'options' => $json,
 			'handle' => $handle,
+			'source' => $source,
 		] );
 	}
 }

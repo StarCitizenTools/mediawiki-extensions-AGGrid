@@ -17,7 +17,23 @@ end
 
 --- Render an AG Grid from a gridOptions table.
 ---
---- @param gridOptions table @AG Grid gridOptions (columnDefs and rowData required)
+--- Two modes:
+---  * Inline: supply `columnDefs` and `rowData` directly.
+---  * Backend source: supply a `source` descriptor and the grid is built from a
+---    stored query (rows fetched on demand). When `source` is present, any author
+---    `columnDefs`/`rowData` are ignored — columns are auto-derived from the
+---    source's property datatypes. The `source` table fields are:
+---      * type      string  @backend type; only 'smw' is supported in v1
+---      * query     string|table  @query condition string, or a sequence of
+---                                 fragments joined with spaces, e.g.
+---                                 { '[[Category:City]]', '[[Population::>1000]]' }
+---      * printouts table   @sequence of properties; each entry is a plain string
+---                          'Population', a 'Property=Label' string, or a table
+---                          { prop = 'Has population', label = 'Pop' }. ≥1 required.
+---      * mainlabel string|nil  @subject column header; '-' suppresses the subject
+---                              column. Defaults to a 'Page' column.
+---
+--- @param gridOptions table @AG Grid gridOptions; inline (columnDefs + rowData) or { source = ... }
 --- @return string @The rendered grid placeholder wikitext
 function aggrid.render( gridOptions )
 	return php.render( gridOptions )

@@ -60,6 +60,16 @@
 		min-height: var( --ag-list-item-height, 1.75rem );
 		cursor: pointer;
 	}
+
+	// AG Grid's theme rule for the checkbox-to-label gap
+	// ( :where(.ag-ltr) :where(.ag-label-align-right) .ag-label { margin-left: var(--ag-spacing) } )
+	// lives in a stylesheet AG Grid injects lazily; it is absent on the first filter open, so the
+	// label sits flush against the checkbox until another filter is opened and back. Set the same
+	// gap on our own (always-loaded) label hook so it is present from the first open. Logical
+	// property for RTL; same value as AG Grid's rule, so the two never stack into a double margin.
+	.ext-aggrid-setfilter__text {
+		margin-inline-start: var( --ag-spacing, 0.5rem );
+	}
 }
 
 .ext-aggrid-setfilter__count {

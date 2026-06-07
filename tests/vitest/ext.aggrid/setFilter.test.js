@@ -6,6 +6,7 @@ function makeParams( rows, getValue ) {
 	const nodes = rows.map( ( data ) => ( { data: data } ) );
 	const params = {
 		column: { id: 'c' },
+		colDef: {},
 		filterChangedCallback: vi.fn(),
 		api: {
 			forEachLeafNode: ( cb ) => nodes.forEach( cb ),
@@ -13,6 +14,24 @@ function makeParams( rows, getValue ) {
 		}
 	};
 	return { params: params, nodes: nodes };
+}
+
+// Build a fake IFilterParams with a server valuesSource function.
+function makeServerParams( valuesSource ) {
+	const params = {
+		column: { id: 'c' },
+		colDef: {
+			filterParams: {
+				valuesSource: valuesSource
+			}
+		},
+		filterChangedCallback: vi.fn(),
+		api: {
+			forEachLeafNode: () => {},
+			getCellValue: () => ''
+		}
+	};
+	return params;
 }
 
 describe( 'deriveValues', () => {
@@ -149,5 +168,201 @@ describe( 'SetFilter GUI', () => {
 		expect( valueBox.classList.contains( 'ag-checked' ) ).toBe( false );
 		expect( allBox.classList.contains( 'ag-indeterminate' ) ).toBe( true );
 		expect( allBox.classList.contains( 'ag-checked' ) ).toBe( false );
+	} );
+} );
+
+describe( 'SetFilter server-backed', () => {
+	// Helper: wait one microtask tick for Promises to settle.
+	function tick() {
+		return new Promise( ( r ) => {
+			setTimeout( r, 0 );
+		} );
+	}
+
+	it( 'sets serverBacked=true when valuesSource is a function', () => {
+		const params = makeServerParams( () => Promise.resolve( { values: [], partial: false } ) );
+		const f = new SetFilter();
+		f.init( params );
+		expect( f.serverBacked ).toBe( true );
+	} );
+
+	it( 'sets serverBacked=false when no valuesSource is given', () => {
+		const { params } = makeParams( [ { s: 'a' } ], ( d ) => d.s );
+		const f = new SetFilter();
+		f.init( params );
+		expect( f.serverBacked ).toBe( false );
+	} );
+
+	it( 'getGui() returns an element immediately (before the async resolve)', () => {
+		const params = makeServerParams( () => new Promise( () => {} ) );
+		const f = new SetFilter();
+		f.init( params );
+		expect( f.getGui() ).toBeInstanceOf( window.HTMLElement );
+	} );
+
+	it( 'getGui() returns the same stable element after the async resolve', async () => {
+		const params = makeServerParams( () => Promise.resolve( {
+			values: [ { key: 'A', label: 'A' } ], partial: false
+		} ) );
+		const f = new SetFilter();
+		f.init( params );
+		const guiBefore = f.getGui();
+		await tick();
+		expect( f.getGui() ).toBe( guiBefore );
+	} );
+
+	it( 'populates value rows from the server source (not forEachLeafNode)', async () => {
+		const params = makeServerParams( () => Promise.resolve( {
+			values: [ { key: 'A', label: 'A' }, { key: 'B', label: 'B' } ],
+			partial: false
+		} ) );
+		const f = new SetFilter();
+		f.init( params );
+		await tick();
+
+		const gui = f.getGui();
+		const rows = gui.querySelectorAll( '.ext-aggrid-setfilter__item--value' );
+		expect( rows.length ).toBe( 2 );
+		expect( rows[ 0 ].textContent ).toContain( 'A' );
+		expect( rows[ 1 ].textContent ).toContain( 'B' );
+	} );
+
+	it( 'server-backed rows show no (count) suffix', async () => {
+		const params = makeServerParams( () => Promise.resolve( {
+			values: [ { key: 'A', label: 'A' }, { key: 'B', label: 'B' } ],
+			partial: false
+		} ) );
+		const f = new SetFilter();
+		f.init( params );
+		await tick();
+
+		const gui = f.getGui();
+		const rows = gui.querySelectorAll( '.ext-aggrid-setfilter__item--value' );
+		rows.forEach( ( row ) => {
+			expect( row.querySelector( '.ext-aggrid-setfilter__count' ) ).toBeNull();
+		} );
+	} );
+
+	it( 'doesFilterPass always returns true when server-backed', async () => {
+		const params = makeServerParams( () => Promise.resolve( {
+			values: [ { key: 'A', label: 'A' } ], partial: false
+		} ) );
+		const f = new SetFilter();
+		f.init( params );
+		await tick();
+
+		// Even for a row whose key would not be in selected, server-backed returns true.
+		expect( f.doesFilterPass( { node: { data: { s: 'Z' } } } ) ).toBe( true );
+	} );
+
+	it( 'getModel() returns { values } when server-backed filter is active', async () => {
+		const params = makeServerParams( () => Promise.resolve( {
+			values: [ { key: 'A', label: 'A' }, { key: 'B', label: 'B' } ],
+			partial: false
+		} ) );
+		const f = new SetFilter();
+		f.init( params );
+		await tick();
+
+		// Uncheck one value to make filter active.
+		const gui = f.getGui();
+		const cbs = gui.querySelectorAll( '.ext-aggrid-setfilter__item--value .ext-aggrid-setfilter__cb' );
+		cbs[ 0 ].checked = false;
+		cbs[ 0 ].dispatchEvent( new window.Event( 'change' ) );
+
+		expect( f.isFilterActive() ).toBe( true );
+		expect( f.getModel() ).toEqual( { values: [ 'B' ] } );
+	} );
+
+	it( 'getModel() returns an exclude model when fewer values are unchecked', async () => {
+		const params = makeServerParams( () => Promise.resolve( {
+			values: [ { key: 'A', label: 'A' }, { key: 'B', label: 'B' }, { key: 'C', label: 'C' } ],
+			partial: false
+		} ) );
+		const f = new SetFilter();
+		f.init( params );
+		await tick();
+
+		// Uncheck only C (1 unchecked < 2 selected) → exclude model keeps the SMW query small.
+		const gui = f.getGui();
+		const cbs = gui.querySelectorAll( '.ext-aggrid-setfilter__item--value .ext-aggrid-setfilter__cb' );
+		cbs[ 2 ].checked = false;
+		cbs[ 2 ].dispatchEvent( new window.Event( 'change' ) );
+
+		expect( f.getModel() ).toEqual( { values: [ 'C' ], exclude: true } );
+	} );
+
+	it( 'setModel restores selection from an exclude model', async () => {
+		const params = makeServerParams( () => Promise.resolve( {
+			values: [ { key: 'A', label: 'A' }, { key: 'B', label: 'B' }, { key: 'C', label: 'C' } ],
+			partial: false
+		} ) );
+		const f = new SetFilter();
+		f.init( params );
+		await tick();
+
+		f.setModel( { values: [ 'C' ], exclude: true } );
+		// A and B selected, C excluded → re-emitting yields the same exclude model.
+		expect( f.getModel() ).toEqual( { values: [ 'C' ], exclude: true } );
+		expect( f.doesFilterPass ).toBeTypeOf( 'function' );
+	} );
+
+	it( 'selection toggles call filterChangedCallback when server-backed', async () => {
+		const params = makeServerParams( () => Promise.resolve( {
+			values: [ { key: 'A', label: 'A' }, { key: 'B', label: 'B' } ],
+			partial: false
+		} ) );
+		const f = new SetFilter();
+		f.init( params );
+		await tick();
+
+		const gui = f.getGui();
+		const cb = gui.querySelector( '.ext-aggrid-setfilter__item--value .ext-aggrid-setfilter__cb' );
+		cb.checked = false;
+		cb.dispatchEvent( new window.Event( 'change' ) );
+
+		expect( params.filterChangedCallback ).toHaveBeenCalled();
+	} );
+
+	it( 'renders the partial note when partial is true', async () => {
+		const params = makeServerParams( () => Promise.resolve( {
+			values: [ { key: 'A', label: 'A' } ], partial: true
+		} ) );
+		const f = new SetFilter();
+		f.init( params );
+		await tick();
+
+		const gui = f.getGui();
+		const note = gui.querySelector( '.ext-aggrid-setfilter__partial' );
+		expect( note ).not.toBeNull();
+		// mw.msg returns the key in test harness.
+		expect( note.textContent ).toBe( 'aggrid-setfilter-partial' );
+	} );
+
+	it( 'does not render the partial note when partial is false', async () => {
+		const params = makeServerParams( () => Promise.resolve( {
+			values: [ { key: 'A', label: 'A' } ], partial: false
+		} ) );
+		const f = new SetFilter();
+		f.init( params );
+		await tick();
+
+		const gui = f.getGui();
+		expect( gui.querySelector( '.ext-aggrid-setfilter__partial' ) ).toBeNull();
+	} );
+
+	it( 'handles a rejected valuesSource without throwing', async () => {
+		const params = makeServerParams( () => Promise.reject( new Error( 'network' ) ) );
+		const f = new SetFilter();
+		f.init( params );
+
+		// Should not throw on rejection.
+		await expect( tick() ).resolves.toBeUndefined();
+
+		// GUI is still a valid element.
+		expect( f.getGui() ).toBeInstanceOf( window.HTMLElement );
+		// No value rows rendered.
+		const rows = f.getGui().querySelectorAll( '.ext-aggrid-setfilter__item--value' );
+		expect( rows.length ).toBe( 0 );
 	} );
 } );

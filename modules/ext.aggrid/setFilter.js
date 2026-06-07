@@ -51,12 +51,93 @@ function SetFilter() {}
 
 SetFilter.prototype.init = function ( params ) {
 	this.params = params;
-	this.counts = deriveValues( params.api, params.column );
+	const valuesSource = params.colDef &&
+		params.colDef.filterParams &&
+		params.colDef.filterParams.valuesSource;
+	if ( typeof valuesSource === 'function' ) {
+		this.serverBacked = true;
+		this.initServerBacked( valuesSource );
+	} else {
+		this.serverBacked = false;
+		this.initClientSide();
+	}
+};
+
+SetFilter.prototype.initClientSide = function () {
+	this.counts = deriveValues( this.params.api, this.params.column );
 	this.allKeys = Array.from( this.counts.keys() );
 	// Inactive to start: every value selected.
 	this.selected = new Set( this.allKeys );
 	this.items = [];
 	this.gui = this.buildGui();
+};
+
+SetFilter.prototype.initServerBacked = function ( valuesSource ) {
+	// Initialise to an empty state so buildGui works synchronously.
+	this.counts = new Map();
+	this.allKeys = [];
+	this.selected = new Set();
+	this.items = [];
+	// Build the GUI shell immediately (AG Grid calls getGui() right after init).
+	this.gui = this.buildGui();
+	// Add a loading indicator to the list until the promise resolves.
+	const list = this.gui.querySelector( '.ag-set-filter-list' );
+	const loading = document.createElement( 'div' );
+	loading.className = 'ext-aggrid-setfilter__loading';
+	loading.textContent = mw.msg( 'aggrid-setfilter-loading' );
+	list.appendChild( loading );
+
+	valuesSource().then( ( result ) => {
+		const values = ( result && result.values ) || [];
+		const partial = !!( result && result.partial );
+
+		// Remove loading indicator.
+		if ( loading.parentNode ) {
+			loading.parentNode.removeChild( loading );
+		}
+
+		// Build the counts map: key → null (counts unknown from server).
+		this.counts = new Map();
+		values.forEach( ( v ) => {
+			this.counts.set( String( v.key ), null );
+		} );
+		this.allKeys = values.map( ( v ) => String( v.key ) );
+		this.selected = new Set( this.allKeys );
+
+		// Populate the list with server-provided values.
+		this.items = [];
+		values.forEach( ( v ) => {
+			const key = String( v.key );
+			const label = v.label !== undefined && v.label !== null ? String( v.label ) : key;
+			const cb = makeItemCheckbox( label );
+			cb.input.addEventListener( 'change', () => this.onToggle( key, cb.input.checked ) );
+			// Pass null for count so no count suffix is rendered.
+			const row = this.buildRow( 'ext-aggrid-setfilter__item--value', cb, null );
+			this.items.push( { key: key, label: label, row: row, box: cb.wrapper, input: cb.input } );
+			list.appendChild( row );
+		} );
+
+		this.syncSelectAll();
+
+		if ( partial ) {
+			const note = document.createElement( 'div' );
+			note.className = 'ext-aggrid-setfilter__partial';
+			note.textContent = mw.msg( 'aggrid-setfilter-partial' );
+			this.gui.appendChild( note );
+		}
+	} ).catch( ( e ) => {
+		mw.log.error( '[ext.aggrid] SetFilter: failed to fetch values', e );
+		if ( loading.parentNode ) {
+			loading.parentNode.removeChild( loading );
+		}
+		const errEl = document.createElement( 'div' );
+		errEl.className = 'ext-aggrid-setfilter__error';
+		errEl.textContent = mw.msg( 'aggrid-setfilter-values-error' );
+		const list2 = this.gui.querySelector( '.ag-set-filter-list' );
+		if ( list2 ) {
+			list2.appendChild( errEl );
+		}
+	} );
 };
 
 SetFilter.prototype.getGui = function () {
@@ -69,18 +150,40 @@ SetFilter.prototype.isFilterActive = function () {
 };
 
 SetFilter.prototype.doesFilterPass = function ( params ) {
+	if ( this.serverBacked ) {
+		return true;
+	}
 	const key = keyOf( displayValue( this.params.api, this.params.column, params.node ) );
 	return this.selected.has( key );
 };
 
 SetFilter.prototype.getModel = function () {
-	return this.isFilterActive() ? { values: Array.from( this.selected ) } : null;
+	if ( !this.isFilterActive() ) {
+		return null;
+	}
+	const selected = Array.from( this.selected );
+	if ( this.serverBacked ) {
+		// The backend pushes this into an SMW query, which caps the number of
+		// conditions (one per value). Send whichever side is smaller: when the
+		// user only unchecks a few values, an "exclude" model is far shorter
+		// (and stays within the query-size limit) than listing every selected one.
+		const unselected = this.allKeys.filter( ( key ) => !this.selected.has( key ) );
+		if ( unselected.length < selected.length ) {
+			return { values: unselected, exclude: true };
+		}
+	}
+	return { values: selected };
 };
 
 SetFilter.prototype.setModel = function ( model ) {
-	this.selected = model && Array.isArray( model.values ) ?
-		new Set( model.values ) :
-		new Set( this.allKeys );
+	if ( !model || !Array.isArray( model.values ) ) {
+		this.selected = new Set( this.allKeys );
+	} else if ( model.exclude ) {
+		const excluded = new Set( model.values );
+		this.selected = new Set( this.allKeys.filter( ( key ) => !excluded.has( key ) ) );
+	} else {
+		this.selected = new Set( model.values );
+	}
 	this.refreshSelectionUi();
 };
 
@@ -121,6 +224,8 @@ function makeItemCheckbox( text ) {
 	const input = setClass( document.createElement( 'input' ),
 		'ag-input-field-input ag-checkbox-input ext-aggrid-setfilter__cb' );
 	input.type = 'checkbox';
+	// A name keeps the browser from flagging an unlabelled form control.
+	input.name = 'aggrid-setfilter-value';
 	input.checked = true;
 	wrapper.appendChild( input );
 	const value = setClass( document.createElement( 'span' ),
@@ -142,6 +247,7 @@ SetFilter.prototype.buildGui = function () {
 	const search = setClass( document.createElement( 'input' ),
 		'ag-input-field-input ag-text-field-input ext-aggrid-setfilter__search' );
 	search.type = 'text';
+	search.name = 'aggrid-setfilter-search';
 	search.setAttribute( 'placeholder', mw.msg( 'aggrid-setfilter-search-placeholder' ) );
 	search.addEventListener( 'input', () => this.onSearch( search.value ) );
 	inputWrapper.appendChild( search );

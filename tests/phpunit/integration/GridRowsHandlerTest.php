@@ -24,9 +24,12 @@ class GridRowsHandlerTest extends MediaWikiIntegrationTestCase {
 	 * @inheritDoc
 	 */
 	protected function getSchemaOverrides( IMaintainableDatabase $db ) {
+		// Editing a page fires LinksUpdateComplete, which flushes both the inline
+		// (aggrid_data) and backend (aggrid_source) stores, so both tables must exist.
+		$dir = dirname( __DIR__, 3 ) . '/sql/' . $db->getType();
 		return [
-			'create' => [ 'aggrid_data' ],
-			'scripts' => [ dirname( __DIR__, 3 ) . '/sql/' . $db->getType() . '/tables-generated.sql' ],
+			'create' => [ 'aggrid_data', 'aggrid_source' ],
+			'scripts' => [ "$dir/tables-generated.sql", "$dir/patch-aggrid_source.sql" ],
 		];
 	}
 

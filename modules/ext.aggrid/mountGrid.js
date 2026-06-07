@@ -6,6 +6,9 @@ const { SetFilter } = require( './setFilter.js' );
 
 const PLACEHOLDER_SELECTOR = '.ext-aggrid';
 const CONFIG_ATTR = 'data-mw-aggrid-options';
+// Rows fetched per Infinite Row Model block, and the native pagination page size.
+// Each block maps to one offset page of the backend query.
+const BLOCK_SIZE = 50;
 // Marks a placeholder as already mounted so re-runs (e.g. wikipage.content
 // firing on initial + re-rendered content) never call createGrid twice on it.
 const INIT_CLASS = 'ext-aggrid--init';
@@ -30,29 +33,46 @@ function parseConfig( el ) {
 }
 
 /**
- * Build the REST path for a placeholder that fetches its rows, or null if it
- * does not carry a complete handle.
+ * Read the {pageid, rev, index} fetch handle from the placeholder, or null if
+ * it does not carry a complete handle.
  *
  * @param {HTMLElement} el The .ext-aggrid container.
- * @return {string|null}
+ * @return {Object|null} { pageid, rev, index } or null.
  */
-function restPath( el ) {
+function readHandle( el ) {
 	const pageid = el.getAttribute( 'data-mw-aggrid-pageid' );
 	const rev = el.getAttribute( 'data-mw-aggrid-rev' );
 	const index = el.getAttribute( 'data-mw-aggrid-index' );
 	if ( !pageid || !rev || index === null ) {
 		return null;
 	}
-	return '/aggrid/v0/grid/' + pageid + '/' + rev + '/' + index + '/rows';
+	return { pageid: pageid, rev: rev, index: index };
 }
 
 /**
- * Drop the loading skeleton/busy state and create the grid.
+ * Build the REST path for a placeholder that fetches all its rows once, or null
+ * if it does not carry a complete handle.
  *
  * @param {HTMLElement} el The .ext-aggrid container.
- * @param {Object} gridOptions Fully-populated gridOptions (rowData present).
+ * @return {string|null}
  */
-function finishMount( el, gridOptions ) {
+function restPath( el ) {
+	const handle = readHandle( el );
+	if ( !handle ) {
+		return null;
+	}
+	return '/aggrid/v0/grid/' + handle.pageid + '/' + handle.rev + '/' + handle.index + '/rows';
+}
+
+/**
+ * Apply the built-in theme, column types and set-filter component to gridOptions,
+ * and drop the loading skeleton/busy state from the container. Shared by the inline
+ * and backend mount paths so both wire the built-ins identically.
+ *
+ * @param {HTMLElement} el The .ext-aggrid container.
+ * @param {Object} gridOptions gridOptions to prepare in place.
+ */
+function prepareGridOptions( el, gridOptions ) {
 	// Apply the wiki theme unless the author already chose one.
 	if ( !gridOptions.theme ) {
 		gridOptions.theme = getWikiTheme();
@@ -74,6 +94,16 @@ function finishMount( el, gridOptions ) {
 		skeleton.remove();
 	}
 	el.removeAttribute( 'aria-busy' );
+}
+
+/**
+ * Drop the loading skeleton/busy state and create the grid.
+ *
+ * @param {HTMLElement} el The .ext-aggrid container.
+ * @param {Object} gridOptions Fully-populated gridOptions (rowData present).
+ */
+function finishMount( el, gridOptions ) {
+	prepareGridOptions( el, gridOptions );
 	// agGrid is the global exposed by the vendored AG Grid bundle.
 	agGrid.createGrid( el, gridOptions );
 }
@@ -100,6 +130,125 @@ function mountError( el, gridOptions ) {
 }
 
 /**
+ * Build a set-filter values source: a function the SetFilter calls to fetch the
+ * distinct values for one column from the backend.
+ *
+ * @param {string} valuesUrl Base /values REST URL.
+ * @param {string} field The column field whose values to fetch.
+ * @return {Function} () => Promise<Array> resolving to the column's values.
+ */
+function makeValuesSource( valuesUrl, field ) {
+	return function () {
+		return new mw.Rest().get( valuesUrl + '?column=' + encodeURIComponent( field ) )
+			.then( ( d ) => ( { values: ( d && d.values ) || [], partial: !!( d && d.partial ) } ) );
+	};
+}
+
+/**
+ * Build the query string for a /page request.
+ *
+ * @param {number} offset Zero-based index of the first row to fetch.
+ * @param {number} limit Number of rows to request (the block size).
+ * @param {Array} sortModel AG Grid sort model; serialized only when non-empty.
+ * @param {Object} filterModel AG Grid filter model; serialized only when non-empty.
+ * @return {string} The query string (no leading '?'), always carrying offset and limit.
+ */
+function buildPageQuery( offset, limit, sortModel, filterModel ) {
+	const params = new URLSearchParams();
+	params.set( 'offset', String( offset ) );
+	// The REST endpoint names the page-size parameter "size".
+	params.set( 'size', String( limit ) );
+	if ( Array.isArray( sortModel ) && sortModel.length ) {
+		params.set( 'sort', JSON.stringify( sortModel ) );
+	}
+	if ( filterModel && Object.keys( filterModel ).length ) {
+		params.set( 'filter', JSON.stringify( filterModel ) );
+	}
+	return params.toString();
+}
+
+/**
+ * Mount a backend (SMW) grid using AG Grid's Infinite Row Model over the backend's
+ * offset pagination, driving AG Grid's native pagination bar. Each block
+ * [startRow, endRow) is fetched by offset/limit, and the total count returned by the
+ * server is passed as the absolute last row so the page bar shows all pages and
+ * jump-to-page works. Sort/filter are delegated to the server: changing either purges
+ * the cache and re-requests from offset 0 automatically (offset paging is stateless,
+ * so no reset bookkeeping is needed).
+ *
+ * @param {HTMLElement} el The .ext-aggrid container.
+ * @param {Object} gridOptions Parsed gridOptions (no rowData; carries a backend handle).
+ */
+function mountBackend( el, gridOptions ) {
+	const handle = readHandle( el );
+	if ( !handle ) {
+		// A backend grid can't render without a stored query (e.g. a preview
+		// placeholder that carries data-mw-aggrid-source but no pageid/rev/index).
+		mountError( el, gridOptions );
+		return;
+	}
+	const base = '/aggrid/v0/grid/' + handle.pageid + '/' + handle.rev + '/' + handle.index;
+	const pageUrl = base + '/page';
+	const valuesUrl = base + '/values';
+
+	// Inject the set-filter value source for backend set-filter columns. The
+	// _subject column is the row's own page title and has no server value list.
+	( gridOptions.columnDefs || [] ).forEach( ( colDef ) => {
+		if ( colDef.filter === 'aggridSet' && colDef.field && colDef.field !== '_subject' ) {
+			colDef.filterParams = Object.assign( {}, colDef.filterParams, {
+				valuesSource: makeValuesSource( valuesUrl, colDef.field )
+			} );
+		}
+	} );
+
+	const datasource = {
+		getRows: function ( params ) {
+			const offset = params.startRow;
+			const limit = params.endRow - params.startRow;
+			const query = buildPageQuery( offset, limit, params.sortModel, params.filterModel );
+			new mw.Rest().get( pageUrl + '?' + query )
+				.then( ( data ) => {
+					const rows = ( data && data.rows ) || [];
+					// total is the absolute row count across all pages; passed as
+					// lastRow so the grid knows the final page. A missing/non-numeric
+					// total would make AG Grid treat the block as "not last" and page
+					// forever, so treat that as a load failure instead.
+					if ( !data || typeof data.total !== 'number' ) {
+						mw.log.error( '[ext.aggrid] grid page response missing total' );
+						params.failCallback();
+						return;
+					}
+					params.successCallback( rows, data.total );
+				} )
+				.catch( ( e ) => {
+					mw.log.error( '[ext.aggrid] failed to fetch grid page', e );
+					params.failCallback();
+				} );
+		}
+	};
+
+	prepareGridOptions( el, gridOptions );
+	// Configure the Infinite Row Model over the offset datasource. The server's
+	// total count drives the page bar; offset paging is stateless so AG Grid can
+	// request any page directly.
+	gridOptions.rowModelType = 'infinite';
+	gridOptions.cacheBlockSize = BLOCK_SIZE;
+	// Default to AG Grid's native pagination bar, but let the author opt into
+	// infinite scroll by setting pagination=false in their gridOptions.
+	if ( gridOptions.pagination === undefined ) {
+		gridOptions.pagination = true;
+	}
+	gridOptions.paginationPageSize = BLOCK_SIZE;
+	// The page size must stay equal to cacheBlockSize for the offset block mapping;
+	// hide AG Grid's page-size selector so the user can't desync them.
+	gridOptions.paginationPageSizeSelector = false;
+	gridOptions.datasource = datasource;
+
+	// The Infinite Row Model fetches block 0 automatically on mount.
+	agGrid.createGrid( el, gridOptions );
+}
+
+/**
  * Mount an AG Grid into a single placeholder. No-op if already mounted.
  *
  * Inline/preview placeholders carry rowData and mount immediately. Otherwise the
@@ -117,6 +266,12 @@ function mountGrid( el ) {
 	}
 	// Mark before any async work so a concurrent/re-entrant pass can't double-mount.
 	el.classList.add( INIT_CLASS );
+
+	const source = el.getAttribute( 'data-mw-aggrid-source' );
+	if ( source ) {
+		mountBackend( el, gridOptions );
+		return;
+	}
 
 	if ( Array.isArray( gridOptions.rowData ) ) {
 		finishMount( el, gridOptions );

@@ -1,0 +1,501 @@
+<?php
+
+declare( strict_types=1 );
+
+namespace MediaWiki\Extension\AGGrid\Tests\Integration\Smw;
+
+use MediaWiki\Extension\AGGrid\DataSource\Smw\FilterTranslator;
+use MediaWiki\Extension\AGGrid\DataSource\Smw\SmwDataSource;
+use MediaWiki\Extension\AGGrid\DataSource\Smw\SmwQueryException;
+use MediaWiki\Extension\AGGrid\DataSource\Smw\TypeColumnMapper;
+use MediaWiki\Extension\AGGrid\Service\SourceSpecStore;
+use MediaWiki\Registration\ExtensionRegistry;
+use MediaWiki\Title\Title;
+use MediaWikiIntegrationTestCase;
+use SMW\DataItems\WikiPage as DIWikiPage;
+use SMW\Query\Language\Conjunction;
+use SMW\Query\Language\Description;
+use SMW\Query\PrintRequest;
+use SMW\Query\Query;
+use SMW\Query\QueryResult;
+use SMW\Query\Result\ResultArray;
+use SMW\Store;
+use SMWDataItem as DataItem;
+use SMWDataValue as DataValue;
+
+/**
+ * Unit-style coverage for SmwDataSource using a mocked SMW Store.
+ *
+ * NOTE on coverage: this exercises the query construction (offset, limit, sort
+ * keys, filter Conjunction), the QueryResult -> GridPage plumbing (rows + total
+ * from a count query), the row-mapping contract (_subject + printout cells), and
+ * the getColumnValues dedup/partial logic. It does NOT exercise SMW's real query
+ * engine or live result iteration — a real-data integration test was attempted
+ * (seeding via Store::updateData, the same pattern SMW's own DB integration tests
+ * use) but SMW's SQLite table setup is not idempotent under this dev environment's
+ * cloned-table test DB and crashes on the first test (SMW's own *DBIntegrationTest
+ * suites fail identically here). The real offset round-trip and getColumnValues
+ * against seeded data are validated end-to-end in Task 15.
+ *
+ * @covers \MediaWiki\Extension\AGGrid\DataSource\Smw\SmwDataSource
+ * @covers \MediaWiki\Extension\AGGrid\DataSource\Smw\SmwQueryException
+ * @group Database
+ */
+class SmwDataSourceTest extends MediaWikiIntegrationTestCase {
+
+	private const PAGE_ID = 4242;
+	private const POP = 'Population';
+	private const CAPITAL = 'Capital';
+
+	protected function setUp(): void {
+		parent::setUp();
+		if ( !ExtensionRegistry::getInstance()->isLoaded( 'SemanticMediaWiki' ) ) {
+			$this->markTestSkipped( 'Semantic MediaWiki is not available' );
+		}
+	}
+
+	/**
+	 * Build an SmwDataSource over a mock Store whose getQueryResult returns the
+	 * given QueryResult, capturing the FIRST Query it was called with into $captured
+	 * (the data query; getPage issues a second count-mode query afterwards).
+	 *
+	 * @param QueryResult $queryResult
+	 * @param array|null $spec Source spec, or null for a default City spec.
+	 * @param Query|null &$captured Receives the data Query passed to getQueryResult.
+	 * @param int $maxValues
+	 */
+	private function newDataSource(
+		QueryResult $queryResult,
+		?array $spec = null,
+		?Query &$captured = null,
+		int $maxValues = 50
+	): SmwDataSource {
+		$spec ??= [
+			'query' => '[[Category:City]]',
+			'printouts' => [ self::POP, self::CAPITAL ],
+			'mainlabel' => null,
+		];
+
+		$store = $this->createMock( Store::class );
+		$captured = null;
+		$store->method( 'getQueryResult' )->willReturnCallback(
+			static function ( Query $query ) use ( &$captured, $queryResult ): QueryResult {
+				// Only the first (data) query is captured; the count query that follows
+				// reuses the same result mock (which also answers getCountValue()).
+				if ( $captured === null ) {
+					$captured = $query;
+				}
+				return $queryResult;
+			}
+		);
+
+		$specStore = $this->createMock( SourceSpecStore::class );
+		$specStore->method( 'getSource' )->willReturn( [ 'source' => 'smw', 'spec' => $spec ] );
+
+		return new SmwDataSource(
+			$store,
+			$specStore,
+			new FilterTranslator(),
+			new TypeColumnMapper(),
+			120,
+			$maxValues
+		);
+	}
+
+	/**
+	 * Build a stub ResultArray that yields the given cell values in order.
+	 *
+	 * @param int $mode PrintRequest mode constant
+	 * @param string $label Print request label
+	 * @param array<int, DataValue> $dataValues DataValues returned by getNextDataValue()
+	 * @param DIWikiPage|null $subject Result subject (for PRINT_THIS)
+	 */
+	private function resultArray(
+		int $mode,
+		string $label,
+		array $dataValues,
+		?DIWikiPage $subject = null
+	): ResultArray {
+		$printRequest = $this->createMock( PrintRequest::class );
+		$printRequest->method( 'getMode' )->willReturn( $mode );
+		$printRequest->method( 'getLabel' )->willReturn( $label );
+
+		$ra = $this->createMock( ResultArray::class );
+		$ra->method( 'getPrintRequest' )->willReturn( $printRequest );
+		if ( $subject !== null ) {
+			$ra->method( 'getResultSubject' )->willReturn( $subject );
+		}
+
+		$queue = $dataValues;
+		$ra->method( 'getNextDataValue' )->willReturnCallback(
+			static function () use ( &$queue ) {
+				return $queue === [] ? false : array_shift( $queue );
+			}
+		);
+		return $ra;
+	}
+
+	/**
+	 * A page-subject result (PRINT_THIS) whose title is $name.
+	 */
+	private function subjectResultArray( string $name ): ResultArray {
+		$subject = $this->createMock( DIWikiPage::class );
+		$subject->method( 'getTitle' )->willReturn( $this->title( $name ) );
+		return $this->resultArray( PrintRequest::PRINT_THIS, '', [], $subject );
+	}
+
+	private function title( string $name ): Title {
+		$title = $this->createMock( Title::class );
+		$title->method( 'getText' )->willReturn( $name );
+		$title->method( 'getLocalURL' )->willReturn( '/wiki/' . $name );
+		return $title;
+	}
+
+	private function scalarDataValue( string $shortText ): DataValue {
+		$item = $this->createMock( DataItem::class );
+		$dv = $this->createMock( DataValue::class );
+		$dv->method( 'getDataItem' )->willReturn( $item );
+		// SmwDataSource maps scalar cells via the wikitext serialization.
+		$dv->method( 'getShortWikiText' )->willReturn( $shortText );
+		return $dv;
+	}
+
+	private function pageDataValue( string $name ): DataValue {
+		$item = $this->createMock( DIWikiPage::class );
+		$item->method( 'getTitle' )->willReturn( $this->title( $name ) );
+		$dv = $this->createMock( DataValue::class );
+		$dv->method( 'getDataItem' )->willReturn( $item );
+		return $dv;
+	}
+
+	/**
+	 * A mock QueryResult that yields the given rows then false, and reports the
+	 * given total via getCountValue() (read by the count-mode query in getPage).
+	 *
+	 * @param array<int, array<int, ResultArray>> $rows
+	 * @param int $total
+	 * @param string[] $errors
+	 */
+	private function queryResult(
+		array $rows,
+		int $total = 0,
+		array $errors = []
+	): QueryResult {
+		$qr = $this->createMock( QueryResult::class );
+		$queue = $rows;
+		$qr->method( 'getNext' )->willReturnCallback(
+			static function () use ( &$queue ) {
+				return $queue === [] ? false : array_shift( $queue );
+			}
+		);
+		$qr->method( 'getCountValue' )->willReturn( $total );
+		$qr->method( 'getErrors' )->willReturn( $errors );
+		return $qr;
+	}
+
+	// -------------------------------------------------------------------------
+	// getPage: row mapping
+	// -------------------------------------------------------------------------
+
+	public function testGetPageMapsSubjectAndPrintoutCells(): void {
+		$row = [
+			$this->subjectResultArray( 'Berlin' ),
+			$this->resultArray( PrintRequest::PRINT_PROP, self::POP, [ $this->scalarDataValue( '3600000' ) ] ),
+			$this->resultArray( PrintRequest::PRINT_PROP, self::CAPITAL, [ $this->pageDataValue( 'Mitte' ) ] ),
+		];
+		$source = $this->newDataSource( $this->queryResult( [ $row ], 42 ) );
+
+		$page = $source->getPage( self::PAGE_ID, 0, 0, [], [], 50 );
+		$rows = $page->getRows();
+		$this->assertCount( 1, $rows );
+
+		$mapped = $rows[0];
+		$this->assertSame(
+			[ 'text' => 'Berlin', 'href' => '/wiki/Berlin' ],
+			$mapped['_subject']
+		);
+		$this->assertSame( '3600000', $mapped[self::POP] );
+		$this->assertSame(
+			[ 'text' => 'Mitte', 'href' => '/wiki/Mitte' ],
+			$mapped[self::CAPITAL]
+		);
+
+		$this->assertSame( 42, $page->getTotal(), 'total comes from the count query' );
+	}
+
+	public function testGetPageTakesFirstDataValuePerCell(): void {
+		$row = [
+			$this->resultArray( PrintRequest::PRINT_PROP, self::POP, [
+				$this->scalarDataValue( 'first' ),
+				$this->scalarDataValue( 'second' ),
+			] ),
+		];
+		$source = $this->newDataSource( $this->queryResult( [ $row ] ) );
+
+		$rows = $source->getPage( self::PAGE_ID, 0, 0, [], [], 50 )->getRows();
+		$this->assertSame( 'first', $rows[0][self::POP] );
+	}
+
+	public function testGetPageOmitsEmptyCell(): void {
+		$row = [
+			$this->resultArray( PrintRequest::PRINT_PROP, self::POP, [] ),
+		];
+		$source = $this->newDataSource( $this->queryResult( [ $row ] ) );
+
+		$rows = $source->getPage( self::PAGE_ID, 0, 0, [], [], 50 )->getRows();
+		$this->assertArrayNotHasKey( self::POP, $rows[0] );
+	}
+
+	// -------------------------------------------------------------------------
+	// getPage: query construction
+	// -------------------------------------------------------------------------
+
+	public function testGetPageBuildsQueryWithOffsetLimitAndSort(): void {
+		$captured = null;
+		$source = $this->newDataSource(
+			$this->queryResult( [] ),
+			null,
+			$captured
+		);
+
+		$source->getPage(
+			self::PAGE_ID,
+			0,
+			75,
+			[ [ 'colId' => self::POP, 'sort' => 'desc' ] ],
+			[],
+			25
+		);
+
+		$this->assertInstanceOf( Query::class, $captured );
+		$this->assertSame( 75, $captured->getOffset() );
+		$this->assertSame( 25, $captured->getLimit() );
+		$this->assertSame(
+			[ self::POP => 'DESC', '' => 'ASC' ],
+			$captured->getSortKeys(),
+			'sort keys carry the user sort plus the subject tiebreaker for stable offset paging'
+		);
+	}
+
+	public function testGetPageResolvesAliasedColumnSortToRealProperty(): void {
+		// An aliased printout ('Has population=Pop'): the column field is the alias
+		// 'Pop', but the stored 'fields' map resolves it to the real property, so the
+		// sort key must be the property DBkey, not the alias.
+		$spec = [
+			'query' => '[[Category:City]]',
+			'printouts' => [ 'Has population=Pop' ],
+			'mainlabel' => null,
+			'fields' => [ 'Pop' => 'Has population' ],
+		];
+		$captured = null;
+		$source = $this->newDataSource( $this->queryResult( [] ), $spec, $captured );
+
+		$source->getPage(
+			self::PAGE_ID,
+			0,
+			0,
+			[ [ 'colId' => 'Pop', 'sort' => 'asc' ] ],
+			[],
+			25
+		);
+
+		$this->assertSame(
+			[ 'Has_population' => 'ASC', '' => 'ASC' ],
+			$captured->getSortKeys(),
+			'aliased column sorts by the resolved property DBkey, not the alias'
+		);
+	}
+
+	public function testGetPageResolvesAliasedColumnFilterToRealProperty(): void {
+		$spec = [
+			'query' => '[[Category:City]]',
+			'printouts' => [ 'Has population=Pop' ],
+			'mainlabel' => null,
+			'fields' => [ 'Pop' => 'Has population' ],
+		];
+		$captured = null;
+		$source = $this->newDataSource( $this->queryResult( [] ), $spec, $captured );
+
+		// A set filter is detected by the 'values' key before any family lookup, so it
+		// builds a Description independent of whether the test wiki knows the property.
+		$source->getPage(
+			self::PAGE_ID,
+			0,
+			0,
+			[],
+			[ 'Pop' => [ 'values' => [ '1000' ] ] ],
+			25
+		);
+
+		$this->assertInstanceOf( Conjunction::class, $captured->getDescription() );
+		$qs = $captured->getDescription()->getQueryString();
+		$this->assertStringContainsString(
+			'Has population',
+			$qs,
+			'aliased column filters on the resolved property, not the alias'
+		);
+	}
+
+	public function testGetColumnValuesResolvesAliasToRealPropertyProjection(): void {
+		// getColumnValues receives the AG Grid field (alias 'Pop'); the projection
+		// query must request the real property, so its non-subject PrintRequest label
+		// is the property. We assert via the captured query's print request labels.
+		$spec = [
+			'query' => '[[Category:City]]',
+			'printouts' => [ 'Has population=Pop' ],
+			'mainlabel' => null,
+			'fields' => [ 'Pop' => 'Has population' ],
+		];
+		$rows = [
+			[ $this->resultArray(
+				PrintRequest::PRINT_PROP,
+				'Has population',
+				[ $this->scalarDataValue( '5' ) ]
+			) ],
+		];
+		$captured = null;
+		$source = $this->newDataSource( $this->queryResult( $rows ), $spec, $captured );
+
+		$result = $source->getColumnValues( self::PAGE_ID, 0, 'Pop' );
+
+		$labels = array_map(
+			static fn ( $pr ): string => $pr->getLabel(),
+			$captured->getExtraPrintouts()
+		);
+		$this->assertContains(
+			'Has population',
+			$labels,
+			'projection requests the resolved property, not the alias'
+		);
+		$this->assertSame( [ [ 'key' => '5', 'label' => '5' ] ], $result['values'] );
+	}
+
+	public function testGetPageReturnsTotalFromCountQuery(): void {
+		$source = $this->newDataSource( $this->queryResult( [], 318 ) );
+
+		$page = $source->getPage( self::PAGE_ID, 0, 0, [], [], 25 );
+		$this->assertSame( 318, $page->getTotal() );
+	}
+
+	public function testGetPageAndsFilterDescriptionViaConjunction(): void {
+		$captured = null;
+		$source = $this->newDataSource(
+			$this->queryResult( [] ),
+			null,
+			$captured
+		);
+
+		// A set filter applies to the default (_wpg) property family, so the
+		// base description gets ANDed with the filter via a Conjunction.
+		$source->getPage(
+			self::PAGE_ID,
+			0,
+			0,
+			[],
+			[ self::CAPITAL => [ 'values' => [ 'Berlin' ] ] ],
+			50
+		);
+
+		$this->assertInstanceOf( Conjunction::class, $captured->getDescription() );
+	}
+
+	public function testGetPageNoFilterLeavesDescriptionUnwrapped(): void {
+		$captured = null;
+		$source = $this->newDataSource(
+			$this->queryResult( [] ),
+			null,
+			$captured
+		);
+
+		$source->getPage( self::PAGE_ID, 0, 0, [], [], 50 );
+
+		$this->assertInstanceOf( Description::class, $captured->getDescription() );
+		$this->assertNotInstanceOf(
+			Conjunction::class,
+			$captured->getDescription(),
+			'no filter model leaves the base description unwrapped'
+		);
+	}
+
+	// -------------------------------------------------------------------------
+	// Errors
+	// -------------------------------------------------------------------------
+
+	public function testQueryErrorsThrow(): void {
+		$source = $this->newDataSource(
+			$this->queryResult( [], 0, [ 'broken condition', 'bad sort' ] )
+		);
+
+		$this->expectException( SmwQueryException::class );
+		$this->expectExceptionMessage( 'broken condition; bad sort' );
+		$source->getPage( self::PAGE_ID, 0, 0, [], [], 50 );
+	}
+
+	public function testUnknownGridThrows(): void {
+		$store = $this->createMock( Store::class );
+		$specStore = $this->createMock( SourceSpecStore::class );
+		$specStore->method( 'getSource' )->willReturn( null );
+		$source = new SmwDataSource(
+			$store, $specStore, new FilterTranslator(), new TypeColumnMapper(), 120, 50
+		);
+
+		$this->expectExceptionMessage( 'no SMW source spec' );
+		$source->getPage( 999, 0, 0, [], [], 10 );
+	}
+
+	// -------------------------------------------------------------------------
+	// getColumnValues
+	// -------------------------------------------------------------------------
+
+	public function testGetColumnValuesDedupesPreservingOrder(): void {
+		$rows = [
+			[ $this->resultArray( PrintRequest::PRINT_PROP, self::POP, [ $this->scalarDataValue( '5' ) ] ) ],
+			[ $this->resultArray( PrintRequest::PRINT_PROP, self::POP, [ $this->scalarDataValue( '7' ) ] ) ],
+			[ $this->resultArray( PrintRequest::PRINT_PROP, self::POP, [ $this->scalarDataValue( '5' ) ] ) ],
+		];
+		$source = $this->newDataSource( $this->queryResult( $rows ) );
+
+		$result = $source->getColumnValues( self::PAGE_ID, 0, self::POP );
+
+		$this->assertSame(
+			[
+				[ 'key' => '5', 'label' => '5' ],
+				[ 'key' => '7', 'label' => '7' ],
+			],
+			$result['values']
+		);
+		$this->assertFalse( $result['partial'] );
+	}
+
+	public function testGetColumnValuesPartialWhenCapped(): void {
+		$rows = [
+			[ $this->resultArray( PrintRequest::PRINT_PROP, self::POP, [ $this->scalarDataValue( '1' ) ] ) ],
+			[ $this->resultArray( PrintRequest::PRINT_PROP, self::POP, [ $this->scalarDataValue( '2' ) ] ) ],
+		];
+		$source = $this->newDataSource( $this->queryResult( $rows ), null, $unused, 2 );
+
+		$result = $source->getColumnValues( self::PAGE_ID, 0, self::POP );
+		$this->assertTrue( $result['partial'], 'row count reaching maxValues marks the list partial' );
+	}
+
+	public function testGetColumnValuesUsesPageCellText(): void {
+		$rows = [
+			[ $this->resultArray( PrintRequest::PRINT_PROP, self::CAPITAL, [ $this->pageDataValue( 'Paris' ) ] ) ],
+		];
+		$source = $this->newDataSource( $this->queryResult( $rows ) );
+
+		$result = $source->getColumnValues( self::PAGE_ID, 0, self::CAPITAL );
+		$this->assertSame( [ [ 'key' => 'Paris', 'label' => 'Paris' ] ], $result['values'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// Cache policy
+	// -------------------------------------------------------------------------
+
+	public function testGetCachePolicyUsesConfiguredMaxAge(): void {
+		$source = $this->newDataSource( $this->queryResult( [] ) );
+		$policy = $source->getCachePolicy();
+		$this->assertSame( 120, $policy->getMaxAge() );
+		$this->assertFalse( $policy->isPublic() );
+	}
+}

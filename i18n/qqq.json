@@ -8,5 +8,8 @@
 	"aggrid-error-load": "Error message shown inside an AG Grid (as its overlay) when the grid's row data fails to load from the server.",
 	"aggrid-setfilter-search-placeholder": "Placeholder text in the search box of a column's set filter, used to narrow a long list of values.",
 	"aggrid-setfilter-select-all": "Label for the checkbox at the top of a set filter that selects or clears every value at once. Shown in parentheses to mark it apart from data values.",
-	"aggrid-setfilter-blanks": "Label for the set-filter entry that groups rows whose cell is empty. Shown in parentheses to mark it apart from data values."
+	"aggrid-setfilter-blanks": "Label for the set-filter entry that groups rows whose cell is empty. Shown in parentheses to mark it apart from data values.",
+	"aggrid-setfilter-loading": "Text shown in the set filter popup while the list of values is being fetched from the server.",
+	"aggrid-setfilter-partial": "Note shown below the set-filter value list when the server returned only a partial list of values (e.g. capped for performance). Informs the user that not all possible values may be shown.",
+	"aggrid-setfilter-values-error": "Error message shown in the set filter popup when fetching the list of values from the server failed."
 }
