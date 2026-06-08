@@ -71,6 +71,9 @@ function restPath( el ) {
  * valueFormatter. Recurses into column-group children. Applied on both the inline
  * and backend paths via prepareGridOptions.
  *
+ * The `format` key is consumed (deleted) once read: it is our own config, not an AG
+ * Grid colDef property, and AG Grid warns about unknown colDef properties otherwise.
+ *
  * @param {Array} colDefs gridOptions.columnDefs (or a group's children).
  */
 function applyFormatters( colDefs ) {
@@ -84,11 +87,14 @@ function applyFormatters( colDefs ) {
 		if ( Array.isArray( colDef.children ) ) {
 			applyFormatters( colDef.children );
 		}
-		if ( colDef.format && !colDef.valueFormatter ) {
-			const formatter = makeFormatter( colDef.format );
-			if ( formatter ) {
-				colDef.valueFormatter = formatter;
+		if ( colDef.format ) {
+			if ( !colDef.valueFormatter ) {
+				const formatter = makeFormatter( colDef.format );
+				if ( formatter ) {
+					colDef.valueFormatter = formatter;
+				}
 			}
+			delete colDef.format;
 		}
 	} );
 }

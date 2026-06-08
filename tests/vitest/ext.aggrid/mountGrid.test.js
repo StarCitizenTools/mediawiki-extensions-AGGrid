@@ -467,18 +467,22 @@ describe( 'mountGrid', () => {
 } );
 
 describe( 'applyFormatters', () => {
-	it( 'installs a valueFormatter for colDefs carrying a format spec', () => {
-		const colDef = { field: 'len', format: { style: 'number', suffix: ' m' } };
+	it( 'installs a valueFormatter and consumes the format key', () => {
+		const colDef = { field: 'len', format: { style: 'number', locale: 'en-US', suffix: ' m' } };
 		applyFormatters( [ colDef ] );
 		expect( typeof colDef.valueFormatter ).toBe( 'function' );
 		expect( colDef.valueFormatter( { value: 1000 } ) ).toBe( '1,000 m' );
+		// `format` is our config, not an AG Grid colDef property — it must be removed so
+		// AG Grid does not warn about an unknown colDef property.
+		expect( 'format' in colDef ).toBe( false );
 	} );
 
-	it( 'does not clobber an explicit valueFormatter', () => {
+	it( 'does not clobber an explicit valueFormatter but still consumes format', () => {
 		const vf = () => 'x';
 		const colDef = { field: 'a', format: { style: 'number' }, valueFormatter: vf };
 		applyFormatters( [ colDef ] );
 		expect( colDef.valueFormatter ).toBe( vf );
+		expect( 'format' in colDef ).toBe( false );
 	} );
 
 	it( 'recurses into column-group children', () => {
