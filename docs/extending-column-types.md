@@ -1,6 +1,9 @@
-# Extending AGGrid with custom column types
+# Extending AGGrid with custom column types and components
 
-AGGrid's core ships only the cell types that need **server-side resolution** — links and
+This guide shows you how to add your own column types and components to AGGrid from
+JavaScript, with a complete worked example at the end.
+
+Core ships only the cell types that need **server-side resolution** — links and
 thumbnails, where MediaWiki must turn a page title or `File:` into a URL before the value
 crosses into the browser. Anything that is purely about **rendering** — coloured badges,
 custom layouts, icons, progress bars — lives in JavaScript on your wiki, registered through
@@ -8,32 +11,73 @@ a hook. Core stays small; you get unlimited rendering freedom.
 
 ## The hook
 
-`buildColumnTypes()` fires `ext.aggrid.registerColumnTypes` before every grid mounts. A
-handler receives the mutable `types` map and `withLink` (a helper that wraps a renderer's
-output in a scheme-checked anchor when the value carries an `href`):
+`registry.js` fires `ext.aggrid.register` before every grid mounts, handing each handler a
+single **registry** object with AG Grid's two native registries plus a helper:
 
 ```javascript
-mw.hook( 'ext.aggrid.registerColumnTypes' ).add( ( types, withLink ) => {
-    types.myType = {
+mw.hook( 'ext.aggrid.register' ).add( ( reg ) => {
+    // columnTypes — colDef bundles (renderer + sort/filter scalar), used via type=
+    reg.columnTypes.myType = {
         cellRenderer: ( params ) => { /* params.value -> DOM node */ },
         valueFormatter: ( p ) => '…', // derived scalar for sort/filter/search/export
         comparator: ( a, b ) => 0     // optional; defaults to the formatted scalar
     };
+    // components — named renderers / filters / editors, used via cellRenderer/filter/cellEditor=
+    reg.components.myFilter = MyFilterComponent;
+    // reg.withLink( render ) — wraps a renderer's output in a scheme-checked anchor
 } );
 ```
 
-Register it from anything that loads before grids mount — a sister extension, a skin, a
-gadget, or `MediaWiki:Common.js`. A type registered this way is a **peer of the built-in
-types**: you reference it from Lua by name (`type = 'myType'`), exactly like `aggridLink`.
+Register from anything that loads before grids mount — a sister extension, a skin, a
+gadget, or `MediaWiki:Common.js`. Your entries are **peers of the built-ins**: reference a
+column type from Lua by name (`type = 'myType'`, like `aggridLink`) and a component by name
+(`filter = 'myFilter'`, like the built-in `aggridSet`).
 
-This maps onto AG Grid's own [`columnTypes`](https://www.ag-grid.com/javascript-data-grid/column-definitions/#default-column-definitions)
-registry — a column type bundles colDef properties (a `cellRenderer` plus its sort/filter
-`valueFormatter`/`comparator`), which is the right shape when a cell needs a renderer *and*
-a derived sort value (badges, links, thumbnails). AG Grid's other registry,
-[`components`](https://www.ag-grid.com/javascript-data-grid/components/) — named renderers,
-filters, and editors referenced by string (`cellRenderer = 'name'`, `filter = 'name'`) — is
-not yet surfaced through this hook, so custom *filters* and *editors* can't be registered
-this way today.
+### Which registry do I use?
+
+Both are AG Grid's own registries. Pick by what the cell needs:
+
+- **[`columnTypes`](https://www.ag-grid.com/javascript-data-grid/column-definitions/#default-column-definitions)**
+  bundles colDef properties — a `cellRenderer` plus its sort/filter
+  `valueFormatter`/`comparator`. Use it when a cell needs a renderer *and* a derived sort
+  value (badges, links, thumbnails).
+- **[`components`](https://www.ag-grid.com/javascript-data-grid/components/)** registers a
+  single named renderer, **filter**, or editor, referenced by string. Use it for a custom
+  filter or editor, or a bare renderer with no sort-scalar needs.
+
+### Example: a custom filter component
+
+AG Grid Community ships few filters; register your own and reference it with `filter = 'name'`:
+
+```javascript
+mw.hook( 'ext.aggrid.register' ).add( ( reg ) => {
+    // A minimal AG Grid filter component (see AG Grid's IFilterComp docs for the full API).
+    class EvenOddFilter {
+        init( params ) {
+            this.params = params;
+            this.checkbox = document.createElement( 'input' );
+            this.checkbox.type = 'checkbox';
+            this.checkbox.addEventListener( 'change', () => params.filterChangedCallback() );
+            const label = document.createElement( 'label' );
+            label.append( this.checkbox, ' Even only' );
+            this.eGui = document.createElement( 'div' );
+            this.eGui.appendChild( label );
+        }
+        getGui() { return this.eGui; }
+        isFilterActive() { return this.checkbox.checked; }
+        doesFilterPass( p ) {
+            // getCellValue is the v32+ value API the extension uses elsewhere (see setFilter.js).
+            const value = this.params.api.getCellValue( { rowNode: p.node, colKey: this.params.column } );
+            return Number( value ) % 2 === 0;
+        }
+        getModel() { return this.checkbox.checked ? { even: true } : null; }
+        setModel( model ) { this.checkbox.checked = !!( model && model.even ); }
+    }
+    reg.components.evenOnly = EvenOddFilter;
+} );
+```
+
+From Lua: `{ field = 'count', filter = 'evenOnly' }`.
 
 ### Rules for a safe, well-behaved renderer
 
@@ -47,12 +91,16 @@ this way today.
 ## Worked example: a status badge
 
 A coloured status pill is pure styling with no server-side resolution, so it belongs here
-rather than in core. Register the renderer and its styles once on your wiki.
+rather than in core. Register the renderer and its styles once on your wiki, then use the
+`badge` type from any grid.
+
+Register the renderer as a column type, mapping the cell value to a safe variant slug:
 
 **`MediaWiki:Common.js`**
 
 ```javascript
-mw.hook( 'ext.aggrid.registerColumnTypes' ).add( ( types ) => {
+mw.hook( 'ext.aggrid.register' ).add( ( reg ) => {
+    const types = reg.columnTypes;
     // The variant becomes a CSS class, so allow only a safe slug.
     const SAFE = /^[a-z0-9-]+$/;
 
@@ -84,6 +132,8 @@ mw.hook( 'ext.aggrid.registerColumnTypes' ).add( ( types ) => {
 } );
 ```
 
+Then style each variant. These colours follow MediaWiki's Codex palette:
+
 **`MediaWiki:Common.css`**
 
 ```css
@@ -104,7 +154,10 @@ mw.hook( 'ext.aggrid.registerColumnTypes' ).add( ( types ) => {
 
 ### Using it from Lua
 
-**Inline grids** — give each cell a structured value:
+With `badge` registered, reference it by `type` like any built-in column type. You can feed
+it values two ways.
+
+**Inline grids** — give each cell a structured value carrying its own variant:
 
 ```lua
 mw.ext.aggrid.render{
@@ -119,8 +172,8 @@ mw.ext.aggrid.render{
 }
 ```
 
-…or send a plain value and map it to a variant on the column — handy when the value comes
-from data you don't format per-cell:
+Or send a plain value and map it to a variant on the column — handy when the value comes
+from data you don't format per cell:
 
 ```lua
 { field = 'status', headerName = 'Status', type = 'badge',
@@ -130,9 +183,9 @@ from data you don't format per-cell:
   } }
 ```
 
-**Backend (Semantic MediaWiki) grids** — the same `type` and `cellRendererParams` can be
-set on a printout, and AGGrid carries them onto the generated column. The cell value is the
-plain SMW value, resolved to a variant by the map:
+**Backend (Semantic MediaWiki) grids** — set the same `type` and `cellRendererParams` on a
+printout, and AGGrid carries them onto the generated column. The cell value is the plain SMW
+value, resolved to a variant by the map:
 
 ```lua
 mw.ext.aggrid.render{

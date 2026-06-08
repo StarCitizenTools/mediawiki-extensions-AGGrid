@@ -109,13 +109,4 @@ describe( 'built-in column types', () => {
 		} );
 	} );
 
-	it( 'fires the registration hook when mw.hook is present', () => {
-		const add = vi.fn();
-		const fire = vi.fn();
-		global.mw.hook = vi.fn( () => ( { add, fire } ) );
-		buildColumnTypes();
-		expect( global.mw.hook ).toHaveBeenCalledWith( 'ext.aggrid.registerColumnTypes' );
-		expect( fire ).toHaveBeenCalled();
-		delete global.mw.hook;
-	} );
 } );
