@@ -130,9 +130,9 @@ const COLUMN_TYPES = {
 };
 
 /**
- * Assemble the AG Grid columnTypes map: built-ins (cellRenderers wrapped for the href
- * modifier) plus any added by extensions/skins via the registration hook. Built fresh
- * per mount so late-registered types apply to the next grid.
+ * Assemble the AG Grid columnTypes map: the built-ins with each cellRenderer wrapped
+ * for the href (withLink) modifier. Pure — registry.js composes this with the
+ * components map and fires the registration hook.
  *
  * @return {Object} columnTypes keyed by type name.
  */
@@ -143,11 +143,6 @@ function buildColumnTypes() {
 			cellRenderer: withLink( COLUMN_TYPES[ name ].cellRenderer )
 		} );
 	} );
-	// Handlers receive the mutable map and the withLink helper so their own renderers
-	// can opt into the href modifier too.
-	if ( typeof mw !== 'undefined' && mw.hook ) {
-		mw.hook( 'ext.aggrid.registerColumnTypes' ).fire( types, withLink );
-	}
 	return types;
 }
 

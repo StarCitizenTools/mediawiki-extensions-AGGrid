@@ -155,11 +155,17 @@ Grids pick up the wiki's colours from the active skin. The AG Grid theme maps to
 
 ## 🧩 Add your own cell types
 
-Core ships only the cell types that need **server-side resolution** (links and thumbnails). Anything that is purely about *rendering* — badges, custom layouts, icons — lives in JavaScript: other extensions, skins, or site scripts (`MediaWiki:Common.js`) register extra column types before grids mount, and you reference them from Lua by name.
+Core ships only the cell types that need **server-side resolution** — links and thumbnails. Anything that is purely about *rendering* (badges, custom layouts, icons) or any custom **filter** or **editor** lives in JavaScript. Register it before grids mount — from another extension, a skin, or a site script (`MediaWiki:Common.js`) — then reference it from Lua by name.
+
+The `ext.aggrid.register` hook hands you a **registry** with AG Grid's two native maps:
+
+- **`columnTypes`** — colDef bundles, referenced from Lua by `type`.
+- **`components`** — named renderers, filters, and editors, referenced by `cellRenderer` / `filter` / `cellEditor`.
 
 ```javascript
-mw.hook( 'ext.aggrid.registerColumnTypes' ).add( ( types, withLink ) => {
-    types.myType = {
+mw.hook( 'ext.aggrid.register' ).add( ( reg ) => {
+    // A column type: a renderer plus its sort/filter scalar, used via type='status'
+    reg.columnTypes.status = {
         cellRenderer: ( params ) => {
             const span = document.createElement( 'span' );
             span.textContent = ( params.value && params.value.label ) || '';
@@ -167,12 +173,15 @@ mw.hook( 'ext.aggrid.registerColumnTypes' ).add( ( types, withLink ) => {
         },
         valueFormatter: ( p ) => ( p.value && p.value.label ) || ''
     };
+    // A component: a named renderer / filter / editor, used via filter='myFilter' etc.
+    // reg.components.myFilter = MyFilterComponent; // define it first — see the guide below
+    // reg.withLink wraps a renderer's output in a scheme-checked link.
 } );
 ```
 
-The handler receives the type map and `withLink`, an optional helper that wraps a renderer's output in a scheme-checked link. Build DOM safely: use `textContent` and typed properties, never `innerHTML` on cell values, and return a plain scalar from `valueFormatter` so sort, filter, search, and export keep working.
+Build DOM safely: use `textContent` and typed properties, never `innerHTML` on cell values. Always return a plain scalar from `valueFormatter` so sort, filter, search, and export keep working.
 
-For a complete, copy-pasteable recipe — a coloured status **badge** (renderer + CSS), used on both inline and Semantic MediaWiki grids — see [`docs/extending-column-types.md`](docs/extending-column-types.md).
+For a complete, copy-pasteable recipe — a coloured status **badge** (renderer + CSS) that works on both inline and Semantic MediaWiki grids — see [`docs/extending-column-types.md`](docs/extending-column-types.md).
 
 ## 📏 Limits
 

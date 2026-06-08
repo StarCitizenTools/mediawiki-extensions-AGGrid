@@ -1,8 +1,7 @@
 /* global agGrid */
 
 const { getWikiTheme } = require( './theme.js' );
-const { buildColumnTypes } = require( './renderers.js' );
-const { SetFilter } = require( './setFilter.js' );
+const { buildRegistry } = require( './registry.js' );
 const { makeFormatter } = require( './format.js' );
 
 const PLACEHOLDER_SELECTOR = '.ext-aggrid';
@@ -100,9 +99,9 @@ function applyFormatters( colDefs ) {
 }
 
 /**
- * Apply the built-in theme, column types and set-filter component to gridOptions,
- * and drop the loading skeleton/busy state from the container. Shared by the inline
- * and backend mount paths so both wire the built-ins identically.
+ * Apply the built-in theme, extension registry (column types + components) to
+ * gridOptions, and drop the loading skeleton/busy state from the container. Shared by
+ * the inline and backend mount paths so both wire the built-ins identically.
  *
  * @param {HTMLElement} el The .ext-aggrid container.
  * @param {Object} gridOptions gridOptions to prepare in place.
@@ -114,17 +113,13 @@ function prepareGridOptions( el, gridOptions ) {
 	}
 	// Attach declarative valueFormatters from colDef.format specs.
 	applyFormatters( gridOptions.columnDefs );
-	// Register the built-in rich-cell column types (link/image/link-list). Built-ins
-	// win over author-supplied entries of the same reserved name — those can't carry
-	// the cellRenderer function across the JSON boundary anyway.
-	gridOptions.columnTypes = Object.assign(
-		{}, gridOptions.columnTypes, buildColumnTypes()
-	);
-	// Register the built-in set filter under its reserved name. Built-in wins over an
-	// author entry of the same name (a real component can't cross the JSON boundary anyway).
-	gridOptions.components = Object.assign(
-		{}, gridOptions.components, { aggridSet: SetFilter }
-	);
+	// Build the extension registry (column types + components) and let skins/gadgets
+	// extend either map via the ext.aggrid.register hook, then apply both to gridOptions.
+	// Built-ins win over author-supplied entries of the same name — those can't carry the
+	// renderer/component functions across the JSON boundary anyway.
+	const registry = buildRegistry();
+	gridOptions.columnTypes = Object.assign( {}, gridOptions.columnTypes, registry.columnTypes );
+	gridOptions.components = Object.assign( {}, gridOptions.components, registry.components );
 	// AG Grid expects an empty container.
 	const skeleton = el.querySelector( '.ext-aggrid__skeleton' );
 	if ( skeleton ) {
