@@ -19,6 +19,12 @@ class LuaLibrary extends LibraryBase {
 	private const MAX_THUMB_WIDTH = 2048;
 
 	/**
+	 * Tracking category for pages that successfully render a grid. Registered in
+	 * extension.json's TrackingCategories; surfaced on Special:TrackingCategories.
+	 */
+	private const USAGE_TRACKING_CATEGORY = 'aggrid-tracking-category';
+
+	/**
 	 * @inheritDoc
 	 */
 	public function register(): array {
@@ -71,6 +77,8 @@ class LuaLibrary extends LibraryBase {
 		// grid's space is reserved at first paint — avoids layout shift (CLS) from
 		// the async JS module's styles arriving late.
 		$parserOutput->addModuleStyles( [ 'ext.aggrid.styles' ] );
+		// Tag the page as using AG Grid (only reached once validation has passed).
+		$parser->addTrackingCategory( self::USAGE_TRACKING_CATEGORY );
 
 		$title = $parser->getTitle();
 		$pageId = $title->getArticleID();
@@ -197,6 +205,8 @@ class LuaLibrary extends LibraryBase {
 		$parserOutput = $parser->getOutput();
 		$parserOutput->addModules( [ 'ext.aggrid' ] );
 		$parserOutput->addModuleStyles( [ 'ext.aggrid.styles' ] );
+		// Tag the page as using AG Grid (only reached once the source is valid).
+		$parser->addTrackingCategory( self::USAGE_TRACKING_CATEGORY );
 
 		$title = $parser->getTitle();
 		$pageId = $title->getArticleID();

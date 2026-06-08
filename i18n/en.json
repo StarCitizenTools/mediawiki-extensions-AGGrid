@@ -6,6 +6,8 @@
 	},
 	"aggrid-desc": "Renders AG Grid data grids",
 	"aggrid-error-load": "Could not load the grid data.",
+	"aggrid-tracking-category": "Pages using AG Grid",
+	"aggrid-tracking-category-desc": "The page embeds an AG Grid data grid produced by the AGGrid extension. The category is shown by default; add <code><nowiki>__HIDDENCAT__</nowiki></code> to the category page to hide it.",
 	"aggrid-setfilter-search-placeholder": "Search…",
 	"aggrid-setfilter-select-all": "(Select all)",
 	"aggrid-setfilter-blanks": "(Blanks)",

@@ -11,6 +11,7 @@ use MediaWiki\Extension\Scribunto\Engines\LuaCommon\LuaError;
 use MediaWiki\Parser\Parser;
 use MediaWiki\Parser\ParserOptions;
 use MediaWiki\Registration\ExtensionRegistry;
+use MediaWiki\Title\Title;
 use MediaWikiIntegrationTestCase;
 use Wikimedia\Rdbms\IMaintainableDatabase;
 
@@ -79,6 +80,14 @@ class LuaLibrarySourceTest extends MediaWikiIntegrationTestCase {
 		$this->assertSame( 'Has population', $columnDefs[1]['field'] );
 		$this->assertSame( 'Has population', $columnDefs[1]['headerName'] );
 		$this->assertSame( 'Has mayor', $columnDefs[2]['field'] );
+
+		// A successful source render tags the page with the usage tracking category.
+		$catName = wfMessage( 'aggrid-tracking-category' )->inContentLanguage()->text();
+		$this->assertContains(
+			Title::makeTitleSafe( NS_CATEGORY, $catName )->getDBkey(),
+			$parserOutput->getCategoryNames(),
+			'the SMW source render path adds the usage tracking category'
+		);
 	}
 
 	public function testQueryFragmentListJoinsWithSpaces(): void {
