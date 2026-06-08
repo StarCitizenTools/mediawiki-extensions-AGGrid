@@ -131,7 +131,7 @@ class LuaLibrary extends LibraryBase {
 		// printout ('Has population=Pop') sorts/filters on the property, not the alias.
 		$fieldToProp = [];
 
-		foreach ( $printouts as [ $prop, $label ] ) {
+		foreach ( $printouts as [ $prop, $label, $options ] ) {
 			// newFromUserLabel returns null on some malformed labels and throws on
 			// others (e.g. a bare underscore); treat both as an invalid property.
 			try {
@@ -145,6 +145,18 @@ class LuaLibrary extends LibraryBase {
 			$typeId = $property->findPropertyValueType();
 			// field MUST equal the column key SmwDataSource emits (the PrintRequest label).
 			$colDef = $mapper->mapColumn( $label, $label, $typeId );
+			// Merge author presentation keys over the datatype-derived colDef. `type`
+			// overrides the derived renderer; cellRendererParams/format are additive.
+			// All are plain serializable data and ride in the placeholder attribute.
+			if ( isset( $options['type'] ) ) {
+				$colDef['type'] = $options['type'];
+			}
+			if ( isset( $options['cellRendererParams'] ) ) {
+				$colDef['cellRendererParams'] = $options['cellRendererParams'];
+			}
+			if ( isset( $options['format'] ) ) {
+				$colDef['format'] = $options['format'];
+			}
 			$columnDefs[] = $colDef;
 			// Stored printout must yield the same label: "prop=label" unless label === prop.
 			$canonicalPrintouts[] = $label !== $prop ? $prop . '=' . $label : $prop;
@@ -240,13 +252,16 @@ class LuaLibrary extends LibraryBase {
 	}
 
 	/**
-	 * Parse the printouts descriptor into a list of [ prop, label ] pairs.
+	 * Parse the printouts descriptor into a list of [ prop, label, options ] triples.
 	 *
 	 * Entries may be a plain string ('Population'), a 'prop=label' string, or a
-	 * table { prop = ..., label = ... }.
+	 * table { prop = ..., label = ..., type = ..., cellRendererParams = ..., format = ... }.
+	 * The options bag carries display-only presentation keys (type, cellRendererParams,
+	 * format) that ride in the placeholder's gridOptions attribute; they are not part of
+	 * the stored query spec.
 	 *
 	 * @param mixed $printouts
-	 * @return array<int, array{0: string, 1: string}>
+	 * @return array<int, array{0: string, 1: string, 2: array}> Options bag keys: type?, cellRendererParams?, format?
 	 * @throws LuaError If empty or an entry lacks a property name.
 	 */
 	private function parsePrintouts( $printouts ): array {
@@ -258,6 +273,7 @@ class LuaLibrary extends LibraryBase {
 
 		$parsed = [];
 		foreach ( $printouts as $entry ) {
+			$options = [];
 			if ( is_string( $entry ) ) {
 				if ( strpos( $entry, '=' ) !== false ) {
 					[ $prop, $label ] = explode( '=', $entry, 2 );
@@ -270,6 +286,18 @@ class LuaLibrary extends LibraryBase {
 			} elseif ( is_array( $entry ) ) {
 				$prop = isset( $entry['prop'] ) ? trim( (string)$entry['prop'] ) : '';
 				$label = isset( $entry['label'] ) ? trim( (string)$entry['label'] ) : $prop;
+				// Display-only presentation keys, copied only when well-typed. These ride
+				// in the placeholder's gridOptions attribute; they are not part of the
+				// stored query spec (the client interprets them at mount).
+				if ( isset( $entry['type'] ) && is_string( $entry['type'] ) ) {
+					$options['type'] = $entry['type'];
+				}
+				if ( isset( $entry['cellRendererParams'] ) && is_array( $entry['cellRendererParams'] ) ) {
+					$options['cellRendererParams'] = $entry['cellRendererParams'];
+				}
+				if ( isset( $entry['format'] ) && is_array( $entry['format'] ) ) {
+					$options['format'] = $entry['format'];
+				}
 			} else {
 				$prop = '';
 				$label = '';
@@ -281,7 +309,7 @@ class LuaLibrary extends LibraryBase {
 			if ( $label === '' ) {
 				$label = $prop;
 			}
-			$parsed[] = [ $prop, $label ];
+			$parsed[] = [ $prop, $label, $options ];
 		}
 
 		return $parsed;

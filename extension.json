@@ -97,6 +97,7 @@
 				"ext.aggrid/theme.js",
 				"ext.aggrid/lazyMount.js",
 				"ext.aggrid/renderers.js",
+				"ext.aggrid/format.js",
 				"ext.aggrid/setFilter.js"
 			],
 			"dependencies": [

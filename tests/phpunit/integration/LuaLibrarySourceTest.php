@@ -226,6 +226,71 @@ class LuaLibrarySourceTest extends MediaWikiIntegrationTestCase {
 		] );
 	}
 
+	public function testPrintoutCarriesPresentationKeysIntoColumnDef(): void {
+		$parser = $this->newStartedParser();
+		$result = $this->newLibrary( $parser )->render( [
+			'source' => [
+				'type' => 'smw',
+				'query' => '[[Category:City]]',
+				'printouts' => [
+					[
+						'prop' => 'Has population',
+						'label' => 'State',
+						// An arbitrary column-type name: the plumbing passes it through
+						// verbatim so a wiki can target a hook-registered renderer.
+						'type' => 'wikiStatusBadge',
+						'cellRendererParams' => [ 'variantMap' => [ 'Flyable' => 'success' ] ],
+					],
+					[
+						'prop' => 'Has mayor',
+						'label' => 'Length',
+						'format' => [ 'style' => 'number', 'suffix' => ' m' ],
+					],
+				],
+			],
+		] );
+		$this->assertCount( 1, $result );
+
+		$columnDefs = $this->viewConfigFromPlaceholder( $parser, $result[0] )['columnDefs'];
+		// columnDefs[0] is the subject column; [1] State, [2] Length.
+		$state = $columnDefs[1];
+		$this->assertSame( 'State', $state['field'] );
+		$this->assertSame( 'wikiStatusBadge', $state['type'], 'author type overrides the derived type' );
+		$this->assertSame(
+			[ 'variantMap' => [ 'Flyable' => 'success' ] ],
+			$state['cellRendererParams']
+		);
+
+		$length = $columnDefs[2];
+		$this->assertSame( 'Length', $length['field'] );
+		$this->assertSame( [ 'style' => 'number', 'suffix' => ' m' ], $length['format'] );
+
+		// Presentation keys are display-only: they live on the colDef (placeholder
+		// attribute), never in the stored query spec that feeds the cacheable REST path.
+		// Printouts are stored as canonical "prop=label" strings, so there is no slot for
+		// presentation keys to leak into the spec at all.
+		$spec = $parser->getOutput()
+			->getExtensionData( GridRenderer::SOURCE_EXT_DATA_KEY . '0' )['spec'];
+		$this->assertSame( [ 'Has population=State', 'Has mayor=Length' ], $spec['printouts'] );
+		$this->assertArrayNotHasKey( 'type', $spec );
+		$this->assertArrayNotHasKey( 'cellRendererParams', $spec );
+		$this->assertArrayNotHasKey( 'format', $spec );
+	}
+
+	public function testNonPresentationPrintoutHasNoExtraKeys(): void {
+		$parser = $this->newStartedParser();
+		$result = $this->newLibrary( $parser )->render( [
+			'source' => [
+				'type' => 'smw',
+				'query' => '[[Category:City]]',
+				'printouts' => [ 'Has population' ],
+			],
+		] );
+		$columnDefs = $this->viewConfigFromPlaceholder( $parser, $result[0] )['columnDefs'];
+		$this->assertArrayNotHasKey( 'cellRendererParams', $columnDefs[1] );
+		$this->assertArrayNotHasKey( 'format', $columnDefs[1] );
+	}
+
 	public function testInlineRenderStillWorks(): void {
 		$parser = $this->newStartedParser();
 		$result = $this->newLibrary( $parser )->render( [

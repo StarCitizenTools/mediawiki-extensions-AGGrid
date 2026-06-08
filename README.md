@@ -9,6 +9,7 @@ You write a standard AG Grid `gridOptions` table in Lua and call one function. T
 - Author full AG Grid `gridOptions` in Lua; existing AG Grid knowledge carries straight over.
 - Clickable wikilinks, thumbnails, linked thumbnails, and link lists inside cells.
 - Sort, filter (including a built-in **set filter**), quick-search, and CSV export all work on the underlying values.
+- Declarative number/date formatting that keeps the underlying value sortable.
 - Lazy-loads, and on saved pages serves rows from a cacheable REST endpoint.
 
 ## 📋 Requirements
@@ -99,6 +100,27 @@ mw.ext.aggrid.render{
 
 The popup lists each unique value with a row count, a search box for long lists, a tri-state "select all", and a `(Blanks)` entry for empty cells. On rich columns (`linkColumn`, `imageColumn`, `linkListColumn`) it filters on the displayed text, matching how sort and quick-search behave. The value list is taken from all loaded rows; it is not narrowed by other columns' active filters.
 
+## 🔢 Formatting numbers and dates
+
+AG Grid formats values with a `valueFormatter` function, which can't cross from Lua into JSON. Instead, set a serialisable `format` spec on a column. The underlying value stays a number or date, so sort, filter, quick-search, and CSV export keep operating on the real value — only the displayed text changes.
+
+```lua
+columnDefs = {
+    { field = 'length', header = 'Length',
+      format = { style = 'number', useGrouping = true, decimals = 0, suffix = ' m' } },
+    { field = 'released', header = 'Released',
+      format = { style = 'date', dateStyle = 'medium' } },
+}
+-- 1234567 shows as "1,234,567 m" and still sorts numerically
+```
+
+- **`style = 'number'`** — `useGrouping` (thousands separators, default `true`), `decimals` (fixed fraction digits), `prefix`, `suffix`, `locale`.
+- **`style = 'date'`** — `dateStyle` (`'short'`, `'medium'`, `'long'`, `'full'`) or a full `options` table of [`Intl.DateTimeFormat`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat) options, plus `locale`. Input is parsed as ISO-8601 (e.g. `2024-03-09`); other strings pass through unchanged.
+
+When `locale` is omitted the viewer's own locale is used, so grouping and date wording follow the reader while a fixed `prefix`/`suffix` stays literal. Non-numeric or empty values pass through untouched. `format` works the same on inline and Semantic MediaWiki source grids.
+
+> On a Semantic MediaWiki **Quantity** column the value already arrives formatted with its unit (e.g. `"27 kg"`), so a `format` spec there is a no-op — it only takes effect where the source value is a bare number.
+
 ## 📖 Lua API (`mw.ext.aggrid`)
 
 ### Render
@@ -133,22 +155,24 @@ Grids pick up the wiki's colours from the active skin. The AG Grid theme maps to
 
 ## 🧩 Add your own cell types
 
-Other extensions, skins, or site scripts (`MediaWiki:Common.js`) can register extra column types before grids mount:
+Core ships only the cell types that need **server-side resolution** (links and thumbnails). Anything that is purely about *rendering* — badges, custom layouts, icons — lives in JavaScript: other extensions, skins, or site scripts (`MediaWiki:Common.js`) register extra column types before grids mount, and you reference them from Lua by name.
 
 ```javascript
 mw.hook( 'ext.aggrid.registerColumnTypes' ).add( ( types, withLink ) => {
-    types.myBadge = {
-        cellRenderer: withLink( ( params ) => {
+    types.myType = {
+        cellRenderer: ( params ) => {
             const span = document.createElement( 'span' );
             span.textContent = ( params.value && params.value.label ) || '';
             return span;
-        } ),
+        },
         valueFormatter: ( p ) => ( p.value && p.value.label ) || ''
     };
 } );
 ```
 
-The handler receives the type map and `withLink`, an optional helper that wraps a renderer's output in a scheme-checked link. Build DOM safely: use `textContent` and typed properties, never `innerHTML` on cell values.
+The handler receives the type map and `withLink`, an optional helper that wraps a renderer's output in a scheme-checked link. Build DOM safely: use `textContent` and typed properties, never `innerHTML` on cell values, and return a plain scalar from `valueFormatter` so sort, filter, search, and export keep working.
+
+For a complete, copy-pasteable recipe — a coloured status **badge** (renderer + CSS), used on both inline and Semantic MediaWiki grids — see [`docs/extending-column-types.md`](docs/extending-column-types.md).
 
 ## 📏 Limits
 
