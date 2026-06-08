@@ -9,6 +9,7 @@ You write a standard AG Grid `gridOptions` table in Lua and call one function. T
 - Author full AG Grid `gridOptions` in Lua; existing AG Grid knowledge carries straight over.
 - Clickable wikilinks, thumbnails, linked thumbnails, and link lists inside cells.
 - Sort, filter (including a built-in **set filter**), quick-search, and CSV export all work on the underlying values.
+- Declarative number/date formatting that keeps the underlying value sortable.
 - Lazy-loads, and on saved pages serves rows from a cacheable REST endpoint.
 
 ## 📋 Requirements
@@ -98,6 +99,27 @@ mw.ext.aggrid.render{
 ```
 
 The popup lists each unique value with a row count, a search box for long lists, a tri-state "select all", and a `(Blanks)` entry for empty cells. On rich columns (`linkColumn`, `imageColumn`, `linkListColumn`) it filters on the displayed text, matching how sort and quick-search behave. The value list is taken from all loaded rows; it is not narrowed by other columns' active filters.
+
+## 🔢 Formatting numbers and dates
+
+AG Grid formats values with a `valueFormatter` function, which can't cross from Lua into JSON. Instead, set a serialisable `format` spec on a column. The underlying value stays a number or date, so sort, filter, quick-search, and CSV export keep operating on the real value — only the displayed text changes.
+
+```lua
+columnDefs = {
+    { field = 'length', header = 'Length',
+      format = { style = 'number', useGrouping = true, decimals = 0, suffix = ' m' } },
+    { field = 'released', header = 'Released',
+      format = { style = 'date', dateStyle = 'medium' } },
+}
+-- 1234567 shows as "1,234,567 m" and still sorts numerically
+```
+
+- **`style = 'number'`** — `useGrouping` (thousands separators, default `true`), `decimals` (fixed fraction digits), `prefix`, `suffix`, `locale`.
+- **`style = 'date'`** — `dateStyle` (`'short'`, `'medium'`, `'long'`, `'full'`) or a full `options` table of [`Intl.DateTimeFormat`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat) options, plus `locale`. Input is parsed as ISO-8601 (e.g. `2024-03-09`); other strings pass through unchanged.
+
+When `locale` is omitted the viewer's own locale is used, so grouping and date wording follow the reader while a fixed `prefix`/`suffix` stays literal. Non-numeric or empty values pass through untouched. `format` works the same on inline and Semantic MediaWiki source grids.
+
+> On a Semantic MediaWiki **Quantity** column the value already arrives formatted with its unit (e.g. `"27 kg"`), so a `format` spec there is a no-op — it only takes effect where the source value is a bare number.
 
 ## 📖 Lua API (`mw.ext.aggrid`)
 

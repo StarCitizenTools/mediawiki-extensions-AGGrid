@@ -26,6 +26,15 @@ Register it from anything that loads before grids mount — a sister extension, 
 gadget, or `MediaWiki:Common.js`. A type registered this way is a **peer of the built-in
 types**: you reference it from Lua by name (`type = 'myType'`), exactly like `aggridLink`.
 
+This maps onto AG Grid's own [`columnTypes`](https://www.ag-grid.com/javascript-data-grid/column-definitions/#default-column-definitions)
+registry — a column type bundles colDef properties (a `cellRenderer` plus its sort/filter
+`valueFormatter`/`comparator`), which is the right shape when a cell needs a renderer *and*
+a derived sort value (badges, links, thumbnails). AG Grid's other registry,
+[`components`](https://www.ag-grid.com/javascript-data-grid/components/) — named renderers,
+filters, and editors referenced by string (`cellRenderer = 'name'`, `filter = 'name'`) — is
+not yet surfaced through this hook, so custom *filters* and *editors* can't be registered
+this way today.
+
 ### Rules for a safe, well-behaved renderer
 
 - **Build DOM, never `innerHTML`.** Use `document.createElement` + `textContent` and typed
