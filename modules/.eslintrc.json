@@ -16,6 +16,11 @@
 	"rules": {
 		"es-x/no-nullish-coalescing-operators": "off",
 		"jsdoc/no-undefined-types": "off",
-		"max-len": "off"
+		"max-len": "off",
+		"prefer-template": "error",
+		"object-shorthand": "error",
+		"prefer-spread": "error",
+		"prefer-rest-params": "error",
+		"no-useless-rename": "error"
 	}
 }

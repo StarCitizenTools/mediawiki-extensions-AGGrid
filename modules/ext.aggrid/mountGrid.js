@@ -46,7 +46,7 @@ function readHandle( el ) {
 	if ( !pageid || !rev || index === null ) {
 		return null;
 	}
-	return { pageid: pageid, rev: rev, index: index };
+	return { pageid, rev, index };
 }
 
 /**
@@ -61,7 +61,7 @@ function restPath( el ) {
 	if ( !handle ) {
 		return null;
 	}
-	return '/aggrid/v0/grid/' + handle.pageid + '/' + handle.rev + '/' + handle.index + '/rows';
+	return `/aggrid/v0/grid/${ handle.pageid }/${ handle.rev }/${ handle.index }/rows`;
 }
 
 /**
@@ -155,9 +155,9 @@ function mountError( el, gridOptions ) {
 	// overlay, which is auto-shown for an empty client-side row model. The
 	// interface message is escaped before being injected into the overlay HTML.
 	gridOptions.overlayNoRowsTemplate =
-		'<span class="ext-aggrid__overlay-error">' +
-		mw.html.escape( mw.msg( 'aggrid-error-load' ) ) +
-		'</span>';
+		`<span class="ext-aggrid__overlay-error">${
+			mw.html.escape( mw.msg( 'aggrid-error-load' ) )
+		}</span>`;
 	finishMount( el, gridOptions );
 }
 
@@ -170,10 +170,8 @@ function mountError( el, gridOptions ) {
  * @return {Function} () => Promise<Array> resolving to the column's values.
  */
 function makeValuesSource( valuesUrl, field ) {
-	return function () {
-		return new mw.Rest().get( valuesUrl + '?column=' + encodeURIComponent( field ) )
-			.then( ( d ) => ( { values: ( d && d.values ) || [], partial: !!( d && d.partial ) } ) );
-	};
+	return () => new mw.Rest().get( `${ valuesUrl }?column=${ encodeURIComponent( field ) }` )
+		.then( ( d ) => ( { values: ( d && d.values ) || [], partial: !!( d && d.partial ) } ) );
 }
 
 /**
@@ -219,9 +217,9 @@ function mountBackend( el, gridOptions ) {
 		mountError( el, gridOptions );
 		return;
 	}
-	const base = '/aggrid/v0/grid/' + handle.pageid + '/' + handle.rev + '/' + handle.index;
-	const pageUrl = base + '/page';
-	const valuesUrl = base + '/values';
+	const base = `/aggrid/v0/grid/${ handle.pageid }/${ handle.rev }/${ handle.index }`;
+	const pageUrl = `${ base }/page`;
+	const valuesUrl = `${ base }/values`;
 
 	// Inject the set-filter value source for backend set-filter columns. The
 	// _subject column is the row's own page title and has no server value list.
@@ -234,11 +232,11 @@ function mountBackend( el, gridOptions ) {
 	} );
 
 	const datasource = {
-		getRows: function ( params ) {
+		getRows( params ) {
 			const offset = params.startRow;
 			const limit = params.endRow - params.startRow;
 			const query = buildPageQuery( offset, limit, params.sortModel, params.filterModel );
-			new mw.Rest().get( pageUrl + '?' + query )
+			new mw.Rest().get( `${ pageUrl }?${ query }` )
 				.then( ( data ) => {
 					const rows = ( data && data.rows ) || [];
 					// total is the absolute row count across all pages; passed as
@@ -340,4 +338,4 @@ function mountAll( root ) {
 	);
 }
 
-module.exports = { parseConfig: parseConfig, mountGrid: mountGrid, mountAll: mountAll, applyFormatters: applyFormatters };
+module.exports = { parseConfig, mountGrid, mountAll, applyFormatters };

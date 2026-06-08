@@ -21,7 +21,7 @@ function buildRegistry() {
 	const registry = {
 		columnTypes: buildColumnTypes(),
 		components: { aggridSet: SetFilter },
-		withLink: withLink
+		withLink
 	};
 	if ( typeof mw !== 'undefined' && mw.hook ) {
 		mw.hook( 'ext.aggrid.register' ).fire( registry );
@@ -29,4 +29,4 @@ function buildRegistry() {
 	return { columnTypes: registry.columnTypes, components: registry.components };
 }
 
-module.exports = { buildRegistry: buildRegistry };
+module.exports = { buildRegistry };

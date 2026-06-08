@@ -32,7 +32,7 @@ function loadAgGrid() {
 			return;
 		}
 		const base = mw.config.get( 'wgExtensionAssetsPath' );
-		const src = base + '/AGGrid/modules/lib/ag-grid-community/ag-grid-community.min.js?v=' + AG_GRID_VERSION;
+		const src = `${ base }/AGGrid/modules/lib/ag-grid-community/ag-grid-community.min.js?v=${ AG_GRID_VERSION }`;
 		const script = document.createElement( 'script' );
 		script.src = src;
 		script.onload = () => resolve();
@@ -64,7 +64,7 @@ function getObserver() {
 							obs.unobserve( entry.target );
 							mountGrid( entry.target );
 						} )
-						.catch( ( e ) => mw.log.error( '[ext.aggrid] ' + e.message ) );
+						.catch( ( e ) => mw.log.error( `[ext.aggrid] ${ e.message }` ) );
 				}
 			} );
 		}, { rootMargin: ROOT_MARGIN } );
@@ -85,7 +85,7 @@ function lazyMount( root ) {
 	if ( !window.IntersectionObserver ) {
 		loadAgGrid()
 			.then( () => mountAll( scope ) )
-			.catch( ( e ) => mw.log.error( '[ext.aggrid] ' + e.message ) );
+			.catch( ( e ) => mw.log.error( `[ext.aggrid] ${ e.message }` ) );
 		return;
 	}
 
@@ -100,4 +100,4 @@ function lazyMount( root ) {
 	);
 }
 
-module.exports = { loadAgGrid: loadAgGrid, lazyMount: lazyMount };
+module.exports = { loadAgGrid, lazyMount };

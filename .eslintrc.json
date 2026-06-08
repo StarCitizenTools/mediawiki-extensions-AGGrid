@@ -3,6 +3,13 @@
 	"extends": [
 		"wikimedia/server"
 	],
+	"rules": {
+		"prefer-template": "error",
+		"object-shorthand": "error",
+		"prefer-spread": "error",
+		"prefer-rest-params": "error",
+		"no-useless-rename": "error"
+	},
 	"overrides": [
 		{
 			"files": [ "vitest.config.js" ],

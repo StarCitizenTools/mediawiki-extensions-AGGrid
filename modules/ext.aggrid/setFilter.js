@@ -96,7 +96,7 @@ function makeItemCheckbox( text ) {
 	value.textContent = text;
 	field.appendChild( wrapper );
 	field.appendChild( value );
-	return { field: field, wrapper: wrapper, input: input };
+	return { field, wrapper, input };
 }
 
 /**
@@ -156,7 +156,7 @@ class SetFilter {
 			const sorted = values.map( ( v ) => {
 				const key = String( v.key );
 				return {
-					key: key,
+					key,
 					label: v.label !== undefined && v.label !== null ? String( v.label ) : key
 				};
 			} );
@@ -178,7 +178,7 @@ class SetFilter {
 				// Pass null for count so no count suffix is rendered.
 				const row = this.buildRow( 'ext-aggrid-setfilter__item--value', cb, null );
 				this.items.push(
-					{ key: v.key, label: v.label, row: row, box: cb.wrapper, input: cb.input }
+					{ key: v.key, label: v.label, row, box: cb.wrapper, input: cb.input }
 				);
 				list.appendChild( row );
 			} );
@@ -285,8 +285,8 @@ class SetFilter {
 		const values = [];
 		this.counts.forEach( ( count, key ) => {
 			values.push( {
-				key: key,
-				count: count,
+				key,
+				count,
 				label: key === BLANK_KEY ? mw.msg( 'aggrid-setfilter-blanks' ) : key
 			} );
 		} );
@@ -304,7 +304,7 @@ class SetFilter {
 			cb.input.addEventListener( 'change', () => this.onToggle( v.key, cb.input.checked ) );
 			const row = this.buildRow( 'ext-aggrid-setfilter__item--value', cb, v.count );
 			this.items.push(
-				{ key: v.key, label: v.label, row: row, box: cb.wrapper, input: cb.input }
+				{ key: v.key, label: v.label, row, box: cb.wrapper, input: cb.input }
 			);
 			list.appendChild( row );
 		} );
@@ -317,13 +317,13 @@ class SetFilter {
 	// the AG Grid checkbox + value. count === null omits the trailing count (the select-all row).
 	buildRow( modifier, cb, count ) {
 		const row = setClass( document.createElement( 'label' ),
-			'ag-set-filter-item ext-aggrid-setfilter__item ' + modifier );
+			`ag-set-filter-item ext-aggrid-setfilter__item ${ modifier }` );
 		row.appendChild( cb.field );
 		if ( count !== null ) {
 			const countEl = setClass(
 				document.createElement( 'span' ), 'ext-aggrid-setfilter__count'
 			);
-			countEl.textContent = '(' + count + ')';
+			countEl.textContent = `(${ count })`;
 			row.appendChild( countEl );
 		}
 		return row;
@@ -384,4 +384,4 @@ class SetFilter {
 	}
 }
 
-module.exports = { SetFilter: SetFilter, deriveValues: deriveValues };
+module.exports = { SetFilter, deriveValues };
