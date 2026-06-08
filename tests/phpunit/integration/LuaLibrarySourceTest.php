@@ -236,7 +236,9 @@ class LuaLibrarySourceTest extends MediaWikiIntegrationTestCase {
 					[
 						'prop' => 'Has population',
 						'label' => 'State',
-						'type' => 'aggridBadge',
+						// An arbitrary column-type name: the plumbing passes it through
+						// verbatim so a wiki can target a hook-registered renderer.
+						'type' => 'wikiStatusBadge',
 						'cellRendererParams' => [ 'variantMap' => [ 'Flyable' => 'success' ] ],
 					],
 					[
@@ -253,7 +255,7 @@ class LuaLibrarySourceTest extends MediaWikiIntegrationTestCase {
 		// columnDefs[0] is the subject column; [1] State, [2] Length.
 		$state = $columnDefs[1];
 		$this->assertSame( 'State', $state['field'] );
-		$this->assertSame( 'aggridBadge', $state['type'], 'author type overrides the derived type' );
+		$this->assertSame( 'wikiStatusBadge', $state['type'], 'author type overrides the derived type' );
 		$this->assertSame(
 			[ 'variantMap' => [ 'Flyable' => 'success' ] ],
 			$state['cellRendererParams']

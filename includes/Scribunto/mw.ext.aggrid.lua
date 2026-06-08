@@ -77,20 +77,6 @@ function aggrid.linkList( targets )
 	return { links = links }
 end
 
---- Build a { label, variant } badge cell value. The variant is a slug ([a-z0-9-])
---- naming a style; unknown/unsafe variants render as 'neutral' client-side. Built-in
---- variants: neutral, success, warning, error, notice, info.
---- @param label string @Badge text
---- @param variant string|nil @Variant slug, e.g. 'success' | 'warning' | 'error'
---- @return table @{ label, variant? }
-function aggrid.badge( label, variant )
-	local cell = { label = label }
-	if variant ~= nil then
-		cell.variant = variant
-	end
-	return cell
-end
-
 -- Shallow-copy a column spec, preset its renderer type, and map `header` to AG Grid's
 -- `headerName` so authors can use the shorter key. Note: the spec's `type` is reserved
 -- and always overwritten with the helper's renderer type; pass `headerName` directly if
@@ -127,14 +113,6 @@ end
 --- @return table
 function aggrid.linkListColumn( spec )
 	return column( spec, 'aggridLinkList' )
-end
-
---- Column def for a badge column. Cells may be aggrid.badge values, or scalars
---- resolved via cellRendererParams.variantMap on the column spec.
---- @param spec table @colDef keys, e.g. { field = 'state', header = 'State' }
---- @return table
-function aggrid.badgeColumn( spec )
-	return column( spec, 'aggridBadge' )
 end
 
 return aggrid

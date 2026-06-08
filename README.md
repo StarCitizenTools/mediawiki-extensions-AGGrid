@@ -133,22 +133,24 @@ Grids pick up the wiki's colours from the active skin. The AG Grid theme maps to
 
 ## 🧩 Add your own cell types
 
-Other extensions, skins, or site scripts (`MediaWiki:Common.js`) can register extra column types before grids mount:
+Core ships only the cell types that need **server-side resolution** (links and thumbnails). Anything that is purely about *rendering* — badges, custom layouts, icons — lives in JavaScript: other extensions, skins, or site scripts (`MediaWiki:Common.js`) register extra column types before grids mount, and you reference them from Lua by name.
 
 ```javascript
 mw.hook( 'ext.aggrid.registerColumnTypes' ).add( ( types, withLink ) => {
-    types.myBadge = {
-        cellRenderer: withLink( ( params ) => {
+    types.myType = {
+        cellRenderer: ( params ) => {
             const span = document.createElement( 'span' );
             span.textContent = ( params.value && params.value.label ) || '';
             return span;
-        } ),
+        },
         valueFormatter: ( p ) => ( p.value && p.value.label ) || ''
     };
 } );
 ```
 
-The handler receives the type map and `withLink`, an optional helper that wraps a renderer's output in a scheme-checked link. Build DOM safely: use `textContent` and typed properties, never `innerHTML` on cell values.
+The handler receives the type map and `withLink`, an optional helper that wraps a renderer's output in a scheme-checked link. Build DOM safely: use `textContent` and typed properties, never `innerHTML` on cell values, and return a plain scalar from `valueFormatter` so sort, filter, search, and export keep working.
+
+For a complete, copy-pasteable recipe — a coloured status **badge** (renderer + CSS), used on both inline and Semantic MediaWiki grids — see [`docs/extending-column-types.md`](docs/extending-column-types.md).
 
 ## 📏 Limits
 
