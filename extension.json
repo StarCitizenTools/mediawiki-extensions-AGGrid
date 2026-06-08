@@ -19,6 +19,9 @@
 			"i18n"
 		]
 	},
+	"TrackingCategories": [
+		"aggrid-tracking-category"
+	],
 	"AutoloadNamespaces": {
 		"MediaWiki\\Extension\\AGGrid\\": "includes/"
 	},
