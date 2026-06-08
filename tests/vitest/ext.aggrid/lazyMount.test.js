@@ -24,6 +24,8 @@ describe( 'lazyMount', () => {
 		// Reset modules so the singleton observer is recreated per test, ensuring
 		// the IntersectionObserver constructor (which captures intersectCb) runs fresh.
 		vi.resetModules();
+		// Concat, not a template literal, so Vite can statically analyse this import.
+		// eslint-disable-next-line prefer-template
 		( { lazyMount, loadAgGrid } = await import( '../../../modules/ext.aggrid/lazyMount.js?t=' + Date.now() ) );
 	} );
 

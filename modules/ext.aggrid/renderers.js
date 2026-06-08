@@ -35,7 +35,7 @@ function anchorWrap( href, el ) {
  * @return {Function}
  */
 function withLink( render ) {
-	return function ( params ) {
+	return ( params ) => {
 		const el = render( params );
 		return ( params.value && params.value.href ) ?
 			anchorWrap( params.value.href, el ) :
@@ -147,10 +147,10 @@ function buildColumnTypes() {
 }
 
 module.exports = {
-	anchorWrap: anchorWrap,
-	withLink: withLink,
-	buildColumnTypes: buildColumnTypes,
+	anchorWrap,
+	withLink,
+	buildColumnTypes,
 	// @internal — exported for tests only. Consume the built-in types via
 	// buildColumnTypes(), which applies the withLink href modifier.
-	COLUMN_TYPES: COLUMN_TYPES
+	COLUMN_TYPES
 };

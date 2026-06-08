@@ -3,7 +3,7 @@ const { SetFilter, deriveValues } = require( '../../../modules/ext.aggrid/setFil
 // Build a fake IFilterParams over an array of row data objects. `getValue` maps a row's
 // data to the display value AG Grid's getCellValue({ useFormatter: true }) would return.
 function makeParams( rows, getValue ) {
-	const nodes = rows.map( ( data ) => ( { data: data } ) );
+	const nodes = rows.map( ( data ) => ( { data } ) );
 	const params = {
 		column: { id: 'c' },
 		colDef: {},
@@ -13,7 +13,7 @@ function makeParams( rows, getValue ) {
 			getCellValue: ( p ) => getValue( p.rowNode.data )
 		}
 	};
-	return { params: params, nodes: nodes };
+	return { params, nodes };
 }
 
 // Build a fake IFilterParams with a server valuesSource function.
@@ -22,7 +22,7 @@ function makeServerParams( valuesSource ) {
 		column: { id: 'c' },
 		colDef: {
 			filterParams: {
-				valuesSource: valuesSource
+				valuesSource
 			}
 		},
 		filterChangedCallback: vi.fn(),
@@ -65,7 +65,7 @@ describe( 'SetFilter logic', () => {
 		const ctx = makeParams( rows, getValue );
 		const f = new SetFilter();
 		f.init( ctx.params );
-		return { f: f, params: ctx.params, nodes: ctx.nodes };
+		return { f, params: ctx.params, nodes: ctx.nodes };
 	}
 
 	it( 'starts inactive with everything selected', () => {
@@ -102,7 +102,7 @@ describe( 'SetFilter GUI', () => {
 		const ctx = makeParams( rows, getValue );
 		const f = new SetFilter();
 		f.init( ctx.params );
-		return { f: f, gui: f.getGui(), params: ctx.params };
+		return { f, gui: f.getGui(), params: ctx.params };
 	}
 
 	it( 'renders a search box, select-all, and a row per value with counts', () => {

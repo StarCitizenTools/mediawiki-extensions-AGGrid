@@ -18,7 +18,7 @@ function numberFormatter( spec ) {
 	const nf = new Intl.NumberFormat( spec.locale || undefined, opts );
 	const prefix = typeof spec.prefix === 'string' ? spec.prefix : '';
 	const suffix = typeof spec.suffix === 'string' ? spec.suffix : '';
-	return function ( params ) {
+	return ( params ) => {
 		if ( isAbsent( params.value ) ) {
 			return '';
 		}
@@ -52,7 +52,7 @@ function dateFormatter( spec ) {
 	const options = ( spec.options && typeof spec.options === 'object' ) ?
 		spec.options : { dateStyle: spec.dateStyle || 'medium' };
 	const df = new Intl.DateTimeFormat( spec.locale || undefined, options );
-	return function ( params ) {
+	return ( params ) => {
 		if ( isAbsent( params.value ) ) {
 			return '';
 		}
@@ -83,4 +83,4 @@ function makeFormatter( spec ) {
 	return null;
 }
 
-module.exports = { makeFormatter: makeFormatter };
+module.exports = { makeFormatter };

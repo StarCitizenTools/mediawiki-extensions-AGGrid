@@ -37,4 +37,4 @@ function getWikiTheme() {
 	return cachedTheme;
 }
 
-module.exports = { THEME_PARAMS: THEME_PARAMS, getWikiTheme: getWikiTheme };
+module.exports = { THEME_PARAMS, getWikiTheme };
