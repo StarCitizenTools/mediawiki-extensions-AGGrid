@@ -205,3 +205,148 @@ mw.ext.aggrid.render{
 
 This is the same mechanism the built-in types use — your `badge` is a first-class column
 type on both the inline and backend paths.
+
+## Rich set filters and the grid API
+
+A rich column often needs to **sort and search on one value but filter on another**, show icons
+in its filter list, or hand a gadget control of the grid. Three optional extension points cover
+these, all reachable from the same `ext.aggrid.register` context. Skip any one and the grid
+behaves exactly as before.
+
+### Filter on a different facet: `filterValueGetter`
+
+By default the set filter derives its value list — and decides what passes — from a column's
+display scalar (its `valueFormatter` output, the same value that sort, quick-search, and CSV
+export use). Set a **function** [`filterValueGetter`](https://www.ag-grid.com/javascript-data-grid/value-getters/)
+on the colDef (or column type) to filter on a different facet instead:
+
+```javascript
+reg.columnTypes.ship = {
+    // Sort / search / export on the ship name…
+    valueFormatter: ( p ) => p.data.name,
+    // …but list manufacturers in the set filter.
+    filterValueGetter: ( p ) => p.data.manufacturer,
+    filter: 'aggridSet'
+};
+```
+
+The getter receives AG Grid's
+[`ValueGetterParams`](https://www.ag-grid.com/javascript-data-grid/value-getters/) shape
+(`{ api, colDef, column, node, data, getValue }`), so a getter written against the AG Grid docs
+works unchanged. A `null`/empty return collapses into the `(Blanks)` bucket like any other
+value.
+
+Two limits, by design:
+
+- **Function form only.** AG Grid also accepts a string expression (`'data.manufacturer'`), but
+  AGGrid doesn't evaluate expressions — a string is ignored and the column falls back to its
+  display scalar. The getter reaches the colDef through this hook anyway, so write a function.
+- **Client-side grids only.** On a Semantic MediaWiki source grid the value list comes from the
+  server and filtering happens in the SMW query, so `filterValueGetter` is a no-op there.
+
+### Icons in the filter list: `filterParams.itemRenderer`
+
+Set-filter rows are plain text by default. Supply a `filterParams.itemRenderer` to render each
+**value** row yourself — for example, a brand glyph beside each manufacturer:
+
+```javascript
+reg.columnTypes.ship = {
+    valueFormatter: ( p ) => p.data.name,
+    filterValueGetter: ( p ) => p.data.manufacturer,
+    filter: 'aggridSet',
+    filterParams: {
+        // ( { label, key, count } ) -> Node. Build DOM; you own escaping, as with a renderer.
+        itemRenderer: ( { label } ) => {
+            const el = document.createElement( 'span' );
+            el.className = 'my-brand my-brand--' + label.toLowerCase().replace( /[^a-z0-9]+/g, '-' );
+            el.textContent = label;
+            return el;
+        }
+    }
+};
+```
+
+The renderer applies to value rows only — never the tri-state "select all" — and the
+mini-filter search box and "select all" keep operating on the label **text**, so search still
+works regardless of what you render. Return a falsy value to fall back to the plain text node.
+As with a `cellRenderer`, build DOM and never assign user data to `innerHTML`.
+
+### A handle to the grid after mount: `ext.aggrid.gridReady`
+
+AGGrid fires `ext.aggrid.gridReady` once for every grid, right after it mounts (on the inline,
+Semantic MediaWiki, and error paths alike), handing you the live AG Grid
+[`GridApi`](https://www.ag-grid.com/javascript-data-grid/grid-api/) plus the placeholder
+element and the resolved `gridOptions`:
+
+```javascript
+mw.hook( 'ext.aggrid.gridReady' ).add( ( api, el, gridOptions ) => {
+    // Add a quick-search box above this grid and wire it to AG Grid's quick filter.
+    const search = document.createElement( 'input' );
+    search.type = 'search';
+    search.placeholder = 'Filter…';
+    search.addEventListener( 'input', () => {
+        api.setGridOption( 'quickFilterText', search.value );
+    } );
+    el.parentNode.insertBefore( search, el );
+} );
+```
+
+Use it for external filters, toolbar controls, programmatic selection or export, or anything
+else the `GridApi` exposes. Like `wikipage.content`, the hook replays its most recent fire to
+handlers added later, so a late subscriber still receives the API. The hook also fires when a
+grid's rows fail to load — it still mounts as an empty grid with an error overlay — so guard on
+`api.getDisplayedRowCount()` if you only want grids that have data.
+
+### Putting it together: a composite "entity card" column
+
+Combine the three with a renderer for a self-contained rich column — registered once on your
+wiki, then used by `type` from any grid:
+
+```javascript
+mw.hook( 'ext.aggrid.register' ).add( ( reg ) => {
+    reg.columnTypes.entityCard = {
+        // Thumbnail + manufacturer eyebrow + name, all in one cell.
+        cellRenderer: ( p ) => {
+            const card = document.createElement( 'div' );
+            card.className = 'entity-card';
+            const eyebrow = document.createElement( 'span' );
+            eyebrow.className = 'entity-card__mfr';
+            eyebrow.textContent = p.data.manufacturer || '';
+            const title = document.createElement( 'span' );
+            title.className = 'entity-card__name';
+            title.textContent = p.data.name || '';
+            card.append( eyebrow, title );
+            return card;
+        },
+        valueFormatter: ( p ) => p.data.name,        // sort / search / export on the name
+        filter: 'aggridSet',
+        filterValueGetter: ( p ) => p.data.manufacturer, // but filter on the manufacturer
+        filterParams: {
+            itemRenderer: ( { label } ) => {
+                const el = document.createElement( 'span' );
+                el.className = 'entity-card__brand';
+                el.textContent = label;
+                return el;
+            }
+        }
+    };
+} );
+```
+
+From Lua, the column carries the fields the renderer and getter read:
+
+```lua
+mw.ext.aggrid.render{
+    columnDefs = {
+        { field = 'name', headerName = 'Ship', type = 'entityCard' },
+    },
+    rowData = {
+        { name = 'Aurora MR', manufacturer = 'RSI' },
+        { name = 'Constellation', manufacturer = 'RSI' },
+        { name = '300i', manufacturer = 'Origin' },
+    },
+}
+```
+
+The grid sorts and quick-searches on the ship name, while the set filter lists `Origin` and
+`RSI` with your brand markup — no extension code specific to your wiki.

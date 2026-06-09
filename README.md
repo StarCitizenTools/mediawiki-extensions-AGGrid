@@ -10,6 +10,7 @@ You write a standard AG Grid `gridOptions` table in Lua and call one function. T
 - Clickable wikilinks, thumbnails, linked thumbnails, and link lists inside cells.
 - Sort, filter (including a built-in **set filter**), quick-search, and CSV export all work on the underlying values.
 - Declarative number/date formatting that keeps the underlying value sortable.
+- Extensible from JavaScript: register custom column types, renderers, and filters, or tap the grid API after mount.
 - Lazy-loads, and on saved pages serves rows from a cacheable REST endpoint.
 
 ## 📋 Requirements
@@ -100,6 +101,8 @@ mw.ext.aggrid.render{
 
 The popup lists each unique value with a row count, a search box for long lists, a tri-state "select all", and a `(Blanks)` entry for empty cells. On rich columns (`linkColumn`, `imageColumn`, `linkListColumn`) it filters on the displayed text, matching how sort and quick-search behave. The value list is taken from all loaded rows; it is not narrowed by other columns' active filters.
 
+A custom column type can override this from JavaScript: `filterValueGetter` filters on a different facet than the column sorts and searches on, and `filterParams.itemRenderer` draws icons or markup beside each value. See [`docs/extending-column-types.md`](docs/extending-column-types.md#rich-set-filters-and-the-grid-api).
+
 ## 🔢 Formatting numbers and dates
 
 AG Grid formats values with a `valueFormatter` function, which can't cross from Lua into JSON. Instead, set a serialisable `format` spec on a column. The underlying value stays a number or date, so sort, filter, quick-search, and CSV export keep operating on the real value — only the displayed text changes.
@@ -181,7 +184,9 @@ mw.hook( 'ext.aggrid.register' ).add( ( reg ) => {
 
 Build DOM safely: use `textContent` and typed properties, never `innerHTML` on cell values. Always return a plain scalar from `valueFormatter` so sort, filter, search, and export keep working.
 
-For a complete, copy-pasteable recipe — a coloured status **badge** (renderer + CSS) that works on both inline and Semantic MediaWiki grids — see [`docs/extending-column-types.md`](docs/extending-column-types.md).
+Need a handle to the grid itself? The `ext.aggrid.gridReady` hook fires after each grid mounts with AG Grid's `GridApi`, the placeholder element, and the resolved `gridOptions` — wire up a quick-search box, external filters, or drive the grid programmatically.
+
+For copy-pasteable recipes — a coloured status **badge** (renderer + CSS), a composite "entity card" column that filters on a different facet than it sorts on, set-filter icons, and the `gridReady` hook — see [`docs/extending-column-types.md`](docs/extending-column-types.md).
 
 ## 📏 Limits
 
