@@ -495,6 +495,33 @@ class SmwDataSourceTest extends MediaWikiIntegrationTestCase {
 		$this->assertSame( [ [ 'key' => 'Paris', 'label' => 'Paris' ] ], $result['values'] );
 	}
 
+	public function testGetColumnValuesEnumeratesAllValuesPerRow(): void {
+		// A multi-valued property (a ship with two manufacturers): the value list must
+		// offer BOTH, because a SomeProperty condition matches a row when ANY value
+		// matches — a first-value-only list offers entries that cannot be coherently
+		// deselected.
+		// The leading empty value pins that empties are skipped without masking
+		// later values (pre-fix, first-value-only reads would have hidden both).
+		$rows = [
+			[ $this->resultArray( PrintRequest::PRINT_PROP, self::POP, [
+				$this->scalarDataValue( '' ),
+				$this->scalarDataValue( 'Origin' ),
+				$this->scalarDataValue( 'RSI' ),
+			] ) ],
+		];
+		$source = $this->newDataSource( $this->queryResult( $rows ) );
+
+		$result = $source->getColumnValues( self::PAGE_ID, 0, self::POP );
+
+		$this->assertSame(
+			[
+				[ 'key' => 'Origin', 'label' => 'Origin' ],
+				[ 'key' => 'RSI', 'label' => 'RSI' ],
+			],
+			$result['values']
+		);
+	}
+
 	// -------------------------------------------------------------------------
 	// Filter facets (issue #20) and closed column resolution
 	// -------------------------------------------------------------------------

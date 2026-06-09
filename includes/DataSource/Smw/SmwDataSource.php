@@ -139,15 +139,13 @@ class SmwDataSource implements BackendDataSource {
 					if ( $resultArray->getPrintRequest()->getMode() === PrintRequest::PRINT_THIS ) {
 						continue;
 					}
-					$cell = $this->firstCellValue( $resultArray );
-					if ( $cell === null ) {
-						continue;
+					foreach ( $this->cellValues( $resultArray ) as $cell ) {
+						$label = is_array( $cell ) ? $cell['text'] : $cell;
+						if ( $label === '' ) {
+							continue;
+						}
+						$values[$label] = [ 'key' => $label, 'label' => $label ];
 					}
-					$label = is_array( $cell ) ? $cell['text'] : $cell;
-					if ( $label === '' ) {
-						continue;
-					}
-					$values[$label] = [ 'key' => $label, 'label' => $label ];
 				}
 				$resultRow = $result->getNext();
 			}
@@ -389,6 +387,28 @@ class SmwDataSource implements BackendDataSource {
 			return null;
 		}
 		return $this->cellFromDataValue( $dataValue );
+	}
+
+	/**
+	 * Read every DataValue of a ResultArray, mapped to cell values.
+	 *
+	 * The set-filter value list must enumerate ALL of a row's values for the
+	 * property: an SMW SomeProperty condition matches a row when ANY value
+	 * matches, so a list built from first values only offers entries that cannot
+	 * be coherently deselected on multi-valued properties. Row cells (mapRow)
+	 * intentionally keep first-value-only display. Values per row are
+	 * intentionally uncapped; maxValues/partial stay row-based.
+	 *
+	 * @return array<int, array{text: string, href: string}|string>
+	 */
+	private function cellValues( ResultArray $resultArray ): array {
+		$cells = [];
+		$dataValue = $resultArray->getNextDataValue();
+		while ( $dataValue !== false ) {
+			$cells[] = $this->cellFromDataValue( $dataValue );
+			$dataValue = $resultArray->getNextDataValue();
+		}
+		return $cells;
 	}
 
 	/**
