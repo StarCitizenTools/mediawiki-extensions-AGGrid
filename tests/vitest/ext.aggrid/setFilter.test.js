@@ -58,6 +58,113 @@ describe( 'deriveValues', () => {
 		const counts = deriveValues( params.api, params.column );
 		expect( counts.get( 'A' ) ).toBe( 2 );
 	} );
+
+	it( 'uses a supplied value getter instead of getCellValue', () => {
+		const { params } = makeParams( [ { s: 'a' }, { s: 'a' } ], ( d ) => d.s );
+		const counts = deriveValues(
+			params.api, params.column, ( node ) => node.data.s.toUpperCase()
+		);
+		expect( counts.get( 'A' ) ).toBe( 2 );
+	} );
+} );
+
+describe( 'SetFilter filterValueGetter', () => {
+	// Rows carry a display scalar (name) and a separate filter facet (mfr). getCellValue
+	// returns the name; the filterValueGetter returns the manufacturer.
+	function makeGetterParams( rows ) {
+		const nodes = rows.map( ( data ) => ( { data } ) );
+		const params = {
+			column: { id: 'c' },
+			colDef: { filterValueGetter: ( p ) => p.data.mfr },
+			filterChangedCallback: vi.fn(),
+			api: {
+				forEachLeafNode: ( cb ) => nodes.forEach( cb ),
+				getCellValue: ( p ) => p.rowNode.data.name
+			}
+		};
+		return { params, nodes };
+	}
+
+	it( 'derives values from the getter, not the formatted cell value', () => {
+		const { params } = makeGetterParams( [
+			{ name: 'Aurora', mfr: 'RSI' },
+			{ name: '300i', mfr: 'Origin' },
+			{ name: 'Constellation', mfr: 'RSI' }
+		] );
+		const f = new SetFilter();
+		f.init( params );
+		// Value list is manufacturers (RSI x2, Origin x1), not ship names.
+		expect( Array.from( f.counts.entries() ) ).toEqual( [ [ 'RSI', 2 ], [ 'Origin', 1 ] ] );
+	} );
+
+	it( 'doesFilterPass checks the getter value', () => {
+		const { params, nodes } = makeGetterParams( [
+			{ name: 'Aurora', mfr: 'RSI' },
+			{ name: '300i', mfr: 'Origin' }
+		] );
+		const f = new SetFilter();
+		f.init( params );
+		f.setModel( { values: [ 'RSI' ] } );
+		expect( f.doesFilterPass( { node: nodes[ 0 ] } ) ).toBe( true ); // RSI
+		expect( f.doesFilterPass( { node: nodes[ 1 ] } ) ).toBe( false ); // Origin
+	} );
+
+	it( 'passes AG-Grid-shaped params to the getter', () => {
+		const seen = [];
+		const nodes = [ { data: { name: 'A', mfr: 'X' } } ];
+		const params = {
+			column: { id: 'c' },
+			colDef: { filterValueGetter: ( p ) => {
+				seen.push( p );
+				return p.data.mfr;
+			} },
+			filterChangedCallback: vi.fn(),
+			api: {
+				forEachLeafNode: ( cb ) => nodes.forEach( cb ),
+				getCellValue: ( p ) => p.rowNode.data.name
+			}
+		};
+		const f = new SetFilter();
+		f.init( params );
+		expect( seen[ 0 ] ).toMatchObject( {
+			colDef: params.colDef,
+			column: params.column,
+			node: nodes[ 0 ],
+			data: { name: 'A', mfr: 'X' }
+		} );
+		expect( typeof seen[ 0 ].getValue ).toBe( 'function' );
+		expect( seen[ 0 ].api ).toBe( params.api );
+	} );
+
+	it( 'collapses blank getter output into the blanks bucket', () => {
+		const { params } = makeGetterParams( [
+			{ name: 'A', mfr: '' },
+			{ name: 'B', mfr: null },
+			{ name: 'C', mfr: 'X' }
+		] );
+		const f = new SetFilter();
+		f.init( params );
+		expect( f.counts.get( '' ) ).toBe( 2 );
+		expect( f.counts.get( 'X' ) ).toBe( 1 );
+	} );
+
+	it( 'ignores a string filterValueGetter (falls back to formatted value)', () => {
+		const nodes = [ { data: { name: 'Aurora', mfr: 'RSI' } } ];
+		const params = {
+			column: { id: 'c' },
+			colDef: { filterValueGetter: 'data.mfr' },
+			filterChangedCallback: vi.fn(),
+			api: {
+				forEachLeafNode: ( cb ) => nodes.forEach( cb ),
+				getCellValue: ( p ) => p.rowNode.data.name
+			}
+		};
+		const f = new SetFilter();
+		f.init( params );
+		// String form unsupported → value list comes from the formatted name.
+		expect( f.counts.has( 'Aurora' ) ).toBe( true );
+		expect( f.counts.has( 'RSI' ) ).toBe( false );
+	} );
 } );
 
 describe( 'SetFilter logic', () => {

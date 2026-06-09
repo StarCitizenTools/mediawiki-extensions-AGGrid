@@ -1,17 +1,44 @@
 // Custom AG Grid (Community) Set Filter: a checkbox list of a column's unique values.
 //
 // AG Grid Community ships no Set Filter; this is a vanilla IFilterComp registered by name
-// (aggridSet) and referenced from a colDef as `filter: 'aggridSet'`. Values are derived
-// from the loaded rows via each column's display scalar — the same valueFormatter output
-// that sort and quick-search use — so a rich link/image column filters on its text, not the
-// raw object. Every label is built as a text node; nothing uses innerHTML.
+// (aggridSet) and referenced from a colDef as `filter: 'aggridSet'`. By default values are
+// derived from the loaded rows via each column's display scalar — the same valueFormatter
+// output that sort and quick-search use — so a rich link/image column filters on its text,
+// not the raw object. A colDef may override this with a function `filterValueGetter`
+// (client-side only; the server-backed path filters in the SMW query) to filter on a
+// different facet than it sorts/searches on. Every label is built as a text node unless a
+// `filterParams.itemRenderer` is supplied; nothing built here uses innerHTML.
 
 // Empty/null/undefined values collapse under this single key (shown as the blanks message).
 const BLANK_KEY = '';
 
-// A node's display value for this column: the valueFormatter output when the column has one
-// (rich columns do), else the raw value. getCellValue with useFormatter is the v32+ API.
-function displayValue( api, column, node ) {
+// Resolve a colDef's filterValueGetter to a node -> value function, or null to use the
+// formatted cell value. Function form only (a string expression is ignored — we don't eval);
+// client-side only. The params mirror AG Grid's ValueGetterParams so a getter written against
+// the AG Grid docs works unchanged.
+function resolveValueGetter( params ) {
+	const getter = params.colDef && params.colDef.filterValueGetter;
+	if ( typeof getter !== 'function' ) {
+		return null;
+	}
+	const api = params.api;
+	return ( node ) => getter( {
+		api,
+		colDef: params.colDef,
+		column: params.column,
+		node,
+		data: node.data,
+		getValue: ( field ) => api.getCellValue( { rowNode: node, colKey: field } )
+	} );
+}
+
+// A node's value for this column: a caller-supplied valueGetter when present, else the
+// valueFormatter output when the column has one (rich columns do) or the raw value.
+// getCellValue with useFormatter is the v32+ API.
+function displayValue( api, column, node, valueGetter ) {
+	if ( valueGetter ) {
+		return valueGetter( node );
+	}
 	return api.getCellValue( { rowNode: node, colKey: column, useFormatter: true } );
 }
 
@@ -39,12 +66,13 @@ function compareLabels( a, b ) {
  *
  * @param {Object} api AG Grid GridApi.
  * @param {Object} column AG Grid Column (or column id).
+ * @param {Function} [valueGetter] Optional node -> value function (from filterValueGetter).
  * @return {Map<string,number>} Insertion-ordered key → row count.
  */
-function deriveValues( api, column ) {
+function deriveValues( api, column, valueGetter ) {
 	const counts = new Map();
 	api.forEachLeafNode( ( node ) => {
-		const key = keyOf( displayValue( api, column, node ) );
+		const key = keyOf( displayValue( api, column, node, valueGetter ) );
 		counts.set( key, ( counts.get( key ) || 0 ) + 1 );
 	} );
 	return counts;
@@ -105,6 +133,7 @@ function makeItemCheckbox( text ) {
 class SetFilter {
 	init( params ) {
 		this.params = params;
+		this.valueGetter = resolveValueGetter( params );
 		const valuesSource = params.colDef &&
 			params.colDef.filterParams &&
 			params.colDef.filterParams.valuesSource;
@@ -118,7 +147,7 @@ class SetFilter {
 	}
 
 	initClientSide() {
-		this.counts = deriveValues( this.params.api, this.params.column );
+		this.counts = deriveValues( this.params.api, this.params.column, this.valueGetter );
 		this.allKeys = Array.from( this.counts.keys() );
 		// Inactive to start: every value selected.
 		this.selected = new Set( this.allKeys );
@@ -219,7 +248,9 @@ class SetFilter {
 		if ( this.serverBacked ) {
 			return true;
 		}
-		const key = keyOf( displayValue( this.params.api, this.params.column, params.node ) );
+		const key = keyOf(
+			displayValue( this.params.api, this.params.column, params.node, this.valueGetter )
+		);
 		return this.selected.has( key );
 	}
 
