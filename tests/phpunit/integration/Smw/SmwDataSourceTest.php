@@ -12,6 +12,7 @@ use MediaWiki\Extension\AGGrid\Service\SourceSpecStore;
 use MediaWiki\Registration\ExtensionRegistry;
 use MediaWiki\Title\Title;
 use MediaWikiIntegrationTestCase;
+use RuntimeException;
 use SMW\DataItems\WikiPage as DIWikiPage;
 use SMW\Query\Language\Conjunction;
 use SMW\Query\Language\Description;
@@ -63,12 +64,15 @@ class SmwDataSourceTest extends MediaWikiIntegrationTestCase {
 	 * @param array|null $spec Source spec, or null for a default City spec.
 	 * @param Query|null &$captured Receives the data Query passed to getQueryResult.
 	 * @param int $maxValues
+	 * @param array|null &$allCaptured Receives EVERY Query passed to getQueryResult,
+	 *  in call order (for getPage: data query, then count query).
 	 */
 	private function newDataSource(
 		QueryResult $queryResult,
 		?array $spec = null,
 		?Query &$captured = null,
-		int $maxValues = 50
+		int $maxValues = 50,
+		?array &$allCaptured = null
 	): SmwDataSource {
 		$spec ??= [
 			'query' => '[[Category:City]]',
@@ -78,13 +82,16 @@ class SmwDataSourceTest extends MediaWikiIntegrationTestCase {
 
 		$store = $this->createMock( Store::class );
 		$captured = null;
+		$allCaptured = [];
 		$store->method( 'getQueryResult' )->willReturnCallback(
-			static function ( Query $query ) use ( &$captured, $queryResult ): QueryResult {
-				// Only the first (data) query is captured; the count query that follows
-				// reuses the same result mock (which also answers getCountValue()).
+			static function ( Query $query ) use ( &$captured, &$allCaptured, $queryResult ): QueryResult {
+				// Only the first (data) query lands in $captured; the count query that
+				// follows reuses the same result mock (which also answers
+				// getCountValue()). $allCaptured records every query in order.
 				if ( $captured === null ) {
 					$captured = $query;
 				}
+				$allCaptured[] = $query;
 				return $queryResult;
 			}
 		);
@@ -486,6 +493,202 @@ class SmwDataSourceTest extends MediaWikiIntegrationTestCase {
 
 		$result = $source->getColumnValues( self::PAGE_ID, 0, self::CAPITAL );
 		$this->assertSame( [ [ 'key' => 'Paris', 'label' => 'Paris' ] ], $result['values'] );
+	}
+
+	// -------------------------------------------------------------------------
+	// Filter facets (issue #20) and closed column resolution
+	// -------------------------------------------------------------------------
+
+	/** A Ship spec with a facet: column 'Name' displays Has name, filters on Has manufacturer. */
+	private function facetSpec(): array {
+		return [
+			'query' => '[[Category:Ship]]',
+			'printouts' => [ 'Has name=Name' ],
+			'mainlabel' => null,
+			'fields' => [ 'Name' => 'Has name' ],
+			'facets' => [ 'Name' => 'Has manufacturer' ],
+		];
+	}
+
+	public function testGetPageFiltersOnDeclaredFacetProperty(): void {
+		$captured = null;
+		$source = $this->newDataSource( $this->queryResult( [] ), $this->facetSpec(), $captured );
+
+		$source->getPage(
+			self::PAGE_ID,
+			0,
+			0,
+			[],
+			[ 'Name' => [ 'values' => [ 'Origin Jumpworks' ] ] ],
+			25
+		);
+
+		$this->assertInstanceOf( Conjunction::class, $captured->getDescription() );
+		$qs = $captured->getDescription()->getQueryString();
+		$this->assertStringContainsString(
+			'Has manufacturer',
+			$qs,
+			'set-filter conditions run against the facet property'
+		);
+		$this->assertStringNotContainsString(
+			'Has name',
+			$qs,
+			'the filter targets the facet instead of the display property'
+		);
+	}
+
+	public function testGetPageExcludeModelFiltersOnDeclaredFacetProperty(): void {
+		$captured = null;
+		$source = $this->newDataSource( $this->queryResult( [] ), $this->facetSpec(), $captured );
+
+		$source->getPage(
+			self::PAGE_ID,
+			0,
+			0,
+			[],
+			[ 'Name' => [ 'values' => [ 'Origin Jumpworks' ], 'exclude' => true ] ],
+			25
+		);
+
+		$this->assertInstanceOf( Conjunction::class, $captured->getDescription() );
+		$qs = $captured->getDescription()->getQueryString();
+		$this->assertStringContainsString(
+			'Has manufacturer',
+			$qs,
+			'exclude-model NEQ conditions run against the facet property'
+		);
+		$this->assertStringNotContainsString( 'Has name', $qs );
+	}
+
+	public function testCountQueryFiltersOnDeclaredFacetProperty(): void {
+		$captured = null;
+		$allCaptured = null;
+		$source = $this->newDataSource(
+			$this->queryResult( [] ), $this->facetSpec(), $captured, 50, $allCaptured
+		);
+
+		$source->getPage(
+			self::PAGE_ID,
+			0,
+			0,
+			[],
+			[ 'Name' => [ 'values' => [ 'Origin Jumpworks' ] ] ],
+			25
+		);
+
+		$this->assertCount( 2, $allCaptured, 'getPage issues a data query then a count query' );
+		$countQuery = $allCaptured[1];
+		$this->assertSame( Query::MODE_COUNT, $countQuery->getQueryMode() );
+		$qs = $countQuery->getDescription()->getQueryString();
+		$this->assertStringContainsString(
+			'Has manufacturer',
+			$qs,
+			'the filtered total is counted against the facet property, matching the rows'
+		);
+	}
+
+	public function testGetPageSortStaysOnDisplayPropertyForFacetedColumn(): void {
+		$captured = null;
+		$source = $this->newDataSource( $this->queryResult( [] ), $this->facetSpec(), $captured );
+
+		$source->getPage(
+			self::PAGE_ID,
+			0,
+			0,
+			[ [ 'colId' => 'Name', 'sort' => 'asc' ] ],
+			[],
+			25
+		);
+
+		$this->assertSame(
+			[ 'Has_name' => 'ASC', '' => 'ASC' ],
+			$captured->getSortKeys(),
+			'the facet redirects filtering only; sort keeps the display property'
+		);
+	}
+
+	public function testGetColumnValuesProjectsFacetProperty(): void {
+		$rows = [
+			[ $this->resultArray(
+				PrintRequest::PRINT_PROP,
+				'Has manufacturer',
+				[ $this->scalarDataValue( 'Origin Jumpworks' ) ]
+			) ],
+		];
+		$captured = null;
+		$source = $this->newDataSource( $this->queryResult( $rows ), $this->facetSpec(), $captured );
+
+		$result = $source->getColumnValues( self::PAGE_ID, 0, 'Name' );
+
+		$labels = array_map(
+			static fn ( $pr ): string => $pr->getLabel(),
+			$captured->getExtraPrintouts()
+		);
+		$this->assertContains(
+			'Has manufacturer',
+			$labels,
+			'the value list enumerates the facet property, matching what conditions run against'
+		);
+		$this->assertSame(
+			[ [ 'key' => 'Origin Jumpworks', 'label' => 'Origin Jumpworks' ] ],
+			$result['values']
+		);
+	}
+
+	public function testGetColumnValuesUndeclaredColumnThrows(): void {
+		$source = $this->newDataSource( $this->queryResult( [] ) );
+
+		$this->expectException( RuntimeException::class );
+		$this->expectExceptionMessage( 'undeclared column' );
+		$source->getColumnValues( self::PAGE_ID, 0, 'Some arbitrary property' );
+	}
+
+	public function testGetPageUndeclaredFilterFieldThrows(): void {
+		$source = $this->newDataSource( $this->queryResult( [] ) );
+
+		$this->expectException( RuntimeException::class );
+		$this->expectExceptionMessage( 'undeclared column' );
+		$source->getPage(
+			self::PAGE_ID, 0, 0, [], [ 'Nope' => [ 'values' => [ 'x' ] ] ], 25
+		);
+	}
+
+	public function testGetPageUndeclaredSortFieldThrows(): void {
+		$source = $this->newDataSource( $this->queryResult( [] ) );
+
+		$this->expectException( RuntimeException::class );
+		$this->expectExceptionMessage( 'undeclared column' );
+		$source->getPage(
+			self::PAGE_ID, 0, 0, [ [ 'colId' => 'Nope', 'sort' => 'asc' ] ], [], 25
+		);
+	}
+
+	public function testLegacySpecWithoutFieldsMapDerivesDeclaredColumns(): void {
+		// A spec stored before the fields map existed: declared columns must derive
+		// from the canonical printout strings, so aliased columns still resolve.
+		$spec = [
+			'query' => '[[Category:City]]',
+			'printouts' => [ 'Has population=Pop' ],
+			'mainlabel' => null,
+		];
+		$rows = [
+			[ $this->resultArray(
+				PrintRequest::PRINT_PROP,
+				'Has population',
+				[ $this->scalarDataValue( '5' ) ]
+			) ],
+		];
+		$captured = null;
+		$source = $this->newDataSource( $this->queryResult( $rows ), $spec, $captured );
+
+		$result = $source->getColumnValues( self::PAGE_ID, 0, 'Pop' );
+
+		$labels = array_map(
+			static fn ( $pr ): string => $pr->getLabel(),
+			$captured->getExtraPrintouts()
+		);
+		$this->assertContains( 'Has population', $labels );
+		$this->assertSame( [ [ 'key' => '5', 'label' => '5' ] ], $result['values'] );
 	}
 
 	// -------------------------------------------------------------------------
