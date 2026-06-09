@@ -105,9 +105,20 @@ function setCheckState( box, input, checked, indeterminate ) {
 	box.classList.toggle( 'ag-indeterminate', indeterminate );
 }
 
+// Resolve a colDef's filterParams.itemRenderer to a function, or null. Used to render the
+// value cell of value rows (never the select-all row). XSS responsibility sits with the
+// caller — the same contract as a cellRenderer.
+function resolveItemRenderer( params ) {
+	const fp = params.colDef && params.colDef.filterParams;
+	const renderer = fp && fp.itemRenderer;
+	return typeof renderer === 'function' ? renderer : null;
+}
+
 // Build a set-filter item's checkbox + value label, mirroring AG Grid's themed ag-checkbox
-// markup. Starts checked (the filter opens with every value selected).
-function makeItemCheckbox( text ) {
+// markup. Starts checked (the filter opens with every value selected). When itemRenderer is a
+// function its returned Node populates the value cell (value rows only); otherwise a plain text
+// node is used. key/count are passed through to the renderer for context.
+function makeItemCheckbox( text, itemRenderer, key, count ) {
 	const field = setClass( document.createElement( 'div' ),
 		'ag-labeled ag-label-align-right ag-checkbox ag-input-field ag-set-filter-item-checkbox' );
 	const wrapper = setClass( document.createElement( 'span' ),
@@ -121,7 +132,13 @@ function makeItemCheckbox( text ) {
 	wrapper.appendChild( input );
 	const value = setClass( document.createElement( 'span' ),
 		'ag-label ag-set-filter-item-value ext-aggrid-setfilter__text' );
-	value.textContent = text;
+	const node = typeof itemRenderer === 'function' ?
+		itemRenderer( { label: text, key, count } ) : null;
+	if ( node ) {
+		value.appendChild( node );
+	} else {
+		value.textContent = text;
+	}
 	field.appendChild( wrapper );
 	field.appendChild( value );
 	return { field, wrapper, input };
@@ -134,6 +151,7 @@ class SetFilter {
 	init( params ) {
 		this.params = params;
 		this.valueGetter = resolveValueGetter( params );
+		this.itemRenderer = resolveItemRenderer( params );
 		const valuesSource = params.colDef &&
 			params.colDef.filterParams &&
 			params.colDef.filterParams.valuesSource;
@@ -202,7 +220,7 @@ class SetFilter {
 			// Populate the list with server-provided values.
 			this.items = [];
 			sorted.forEach( ( v ) => {
-				const cb = makeItemCheckbox( v.label );
+				const cb = makeItemCheckbox( v.label, this.itemRenderer, v.key, null );
 				cb.input.addEventListener( 'change', () => this.onToggle( v.key, cb.input.checked ) );
 				// Pass null for count so no count suffix is rendered.
 				const row = this.buildRow( 'ext-aggrid-setfilter__item--value', cb, null );
@@ -331,7 +349,7 @@ class SetFilter {
 			return compareLabels( a.label, b.label );
 		} );
 		values.forEach( ( v ) => {
-			const cb = makeItemCheckbox( v.label );
+			const cb = makeItemCheckbox( v.label, this.itemRenderer, v.key, v.count );
 			cb.input.addEventListener( 'change', () => this.onToggle( v.key, cb.input.checked ) );
 			const row = this.buildRow( 'ext-aggrid-setfilter__item--value', cb, v.count );
 			this.items.push(

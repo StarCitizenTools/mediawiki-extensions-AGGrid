@@ -547,3 +547,117 @@ describe( 'SetFilter server-backed', () => {
 		expect( rows.length ).toBe( 0 );
 	} );
 } );
+
+describe( 'SetFilter itemRenderer', () => {
+	function makeRendererParams( rows, itemRenderer ) {
+		const nodes = rows.map( ( data ) => ( { data } ) );
+		const params = {
+			column: { id: 'c' },
+			colDef: { filterParams: { itemRenderer } },
+			filterChangedCallback: vi.fn(),
+			api: {
+				forEachLeafNode: ( cb ) => nodes.forEach( cb ),
+				getCellValue: ( p ) => p.rowNode.data.s
+			}
+		};
+		return { params, nodes };
+	}
+
+	function tick() {
+		return new Promise( ( r ) => {
+			setTimeout( r, 0 );
+		} );
+	}
+
+	it( 'renders value cells with the custom node', () => {
+		const { params } = makeRendererParams( [ { s: 'apple' }, { s: 'banana' } ], ( item ) => {
+			const span = document.createElement( 'span' );
+			span.className = 'glyph';
+			span.textContent = `★${ item.label }`;
+			return span;
+		} );
+		const f = new SetFilter();
+		f.init( params );
+		const gui = f.getGui();
+		const glyphs = gui.querySelectorAll( '.ext-aggrid-setfilter__item--value .glyph' );
+		expect( glyphs.length ).toBe( 2 );
+		expect( glyphs[ 0 ].textContent ).toBe( '★apple' );
+	} );
+
+	it( 'passes { label, key, count } to the renderer', () => {
+		const seen = [];
+		const { params } = makeRendererParams( [ { s: 'apple' }, { s: 'apple' } ], ( item ) => {
+			seen.push( item );
+			return document.createElement( 'span' );
+		} );
+		const f = new SetFilter();
+		f.init( params );
+		expect( seen[ 0 ] ).toEqual( { label: 'apple', key: 'apple', count: 2 } );
+	} );
+
+	it( 'does not render the select-all row with the renderer', () => {
+		const { params } = makeRendererParams( [ { s: 'apple' } ], () => {
+			const span = document.createElement( 'span' );
+			span.className = 'glyph';
+			return span;
+		} );
+		const f = new SetFilter();
+		f.init( params );
+		const gui = f.getGui();
+		expect( gui.querySelector( '.ext-aggrid-setfilter__item--all .glyph' ) ).toBeNull();
+	} );
+
+	it( 'falls back to a text node when the renderer returns falsy', () => {
+		const { params } = makeRendererParams( [ { s: 'apple' } ], () => null );
+		const f = new SetFilter();
+		f.init( params );
+		const gui = f.getGui();
+		const text = gui.querySelector(
+			'.ext-aggrid-setfilter__item--value .ext-aggrid-setfilter__text'
+		);
+		expect( text.textContent ).toBe( 'apple' );
+	} );
+
+	it( 'search still matches on the label text when a renderer is used', () => {
+		const { params } = makeRendererParams( [ { s: 'apple' }, { s: 'banana' } ], ( item ) => {
+			const span = document.createElement( 'span' );
+			span.textContent = item.label;
+			return span;
+		} );
+		const f = new SetFilter();
+		f.init( params );
+		const gui = f.getGui();
+		const search = gui.querySelector( '.ext-aggrid-setfilter__search' );
+		search.value = 'ban';
+		search.dispatchEvent( new window.Event( 'input' ) );
+		const rows = gui.querySelectorAll( '.ext-aggrid-setfilter__item--value' );
+		expect( rows[ 0 ].hidden ).toBe( true ); // apple
+		expect( rows[ 1 ].hidden ).toBe( false ); // banana
+		expect( f.isFilterActive() ).toBe( false );
+	} );
+
+	it( 'renders server-backed value rows with the custom node', async () => {
+		const itemRenderer = ( item ) => {
+			const span = document.createElement( 'span' );
+			span.className = 'glyph';
+			span.textContent = item.label;
+			return span;
+		};
+		const params = {
+			column: { id: 'c' },
+			colDef: { filterParams: {
+				itemRenderer,
+				valuesSource: () => Promise.resolve( {
+					values: [ { key: 'A', label: 'A' }, { key: 'B', label: 'B' } ], partial: false
+				} )
+			} },
+			filterChangedCallback: vi.fn(),
+			api: { forEachLeafNode: () => {}, getCellValue: () => '' }
+		};
+		const f = new SetFilter();
+		f.init( params );
+		await tick();
+		const glyphs = f.getGui().querySelectorAll( '.ext-aggrid-setfilter__item--value .glyph' );
+		expect( glyphs.length ).toBe( 2 );
+	} );
+} );
