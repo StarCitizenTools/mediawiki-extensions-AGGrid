@@ -29,7 +29,11 @@ end
 ---                                 { '[[Category:City]]', '[[Population::>1000]]' }
 ---      * printouts table   @sequence of properties; each entry is a plain string
 ---                          'Population', a 'Property=Label' string, or a table
----                          { prop = 'Has population', label = 'Pop' }. ≥1 required.
+---                          { prop = 'Has population', label = 'Pop',
+---                            filterProp = 'Has continent' }. ≥1 required.
+---                          filterProp declares a filter facet: the column's filter
+---                          lists and matches that property's values while the column
+---                          displays and sorts on `prop`.
 ---      * mainlabel string|nil  @subject column header; '-' suppresses the subject
 ---                              column. Defaults to a 'Page' column.
 ---
