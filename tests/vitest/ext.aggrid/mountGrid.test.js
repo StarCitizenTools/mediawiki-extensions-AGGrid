@@ -47,6 +47,45 @@ describe( 'mountGrid', () => {
 		expect( el.classList.contains( 'ext-aggrid--init' ) ).toBe( true );
 	} );
 
+	// Per-hook-name fire spies: buildRegistry also fires ext.aggrid.register through
+	// mw.hook, so a single shared fire() spy would conflate the two hooks.
+	function mockHooks() {
+		const fires = {};
+		global.mw.hook = vi.fn( ( name ) => {
+			fires[ name ] = fires[ name ] || vi.fn();
+			return { fire: fires[ name ] };
+		} );
+		return fires;
+	}
+
+	it( 'fires ext.aggrid.gridReady once with the api on mount', () => {
+		const api = { id: 'api' };
+		global.agGrid.createGrid = vi.fn().mockReturnValue( api );
+		const fires = mockHooks();
+
+		const el = makeEl( '{"columnDefs":[],"rowData":[]}' );
+		mountGrid( el );
+
+		expect( global.mw.hook ).toHaveBeenCalledWith( 'ext.aggrid.gridReady' );
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		expect( fires[ 'ext.aggrid.gridReady' ] ).toHaveBeenCalledTimes( 1 );
+		expect( fires[ 'ext.aggrid.gridReady' ] ).toHaveBeenCalledWith( api, el, opts );
+
+		delete global.mw.hook;
+	} );
+
+	it( 'fires ext.aggrid.gridReady on the error mount path', () => {
+		const fires = mockHooks();
+
+		// No rowData and no fetch handle → error mount.
+		const el = makeEl( '{"columnDefs":[{"field":"name"}]}' );
+		mountGrid( el );
+
+		expect( fires[ 'ext.aggrid.gridReady' ] ).toHaveBeenCalledTimes( 1 );
+
+		delete global.mw.hook;
+	} );
+
 	it( 'does not mount the same element twice', () => {
 		const el = makeEl( '{"columnDefs":[{"field":"name"}],"rowData":[]}' );
 		mountGrid( el );
