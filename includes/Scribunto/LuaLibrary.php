@@ -138,6 +138,9 @@ class LuaLibrary extends LibraryBase {
 		// SmwDataSource resolves a column's property through this map so an aliased
 		// printout ('Has population=Pop') sorts/filters on the property, not the alias.
 		$fieldToProp = [];
+		// field -> facet property label (issue #20): the property the column's filter
+		// lists and matches, while display/sort stay on the column's own property.
+		$facets = [];
 
 		foreach ( $printouts as [ $prop, $label, $options ] ) {
 			// newFromUserLabel returns null on some malformed labels and throws on
@@ -164,6 +167,20 @@ class LuaLibrary extends LibraryBase {
 			}
 			if ( isset( $options['format'] ) ) {
 				$colDef['format'] = $options['format'];
+			}
+			$facetProperty = $this->resolveFacetProperty( $options['filterProp'] ?? null, $property );
+			if ( $facetProperty !== null ) {
+				$filter = $mapper->filterComponent( $facetProperty->findPropertyValueType() );
+				if ( $filter === false ) {
+					throw new LuaError(
+						'mw.ext.aggrid.render: filter property "' . $options['filterProp'] .
+						'" has a datatype that cannot be filtered'
+					);
+				}
+				// The whole filter follows the facet: the component here, the value
+				// list and query conditions server-side via the spec's facets map.
+				$colDef['filter'] = $filter;
+				$facets[$label] = $facetProperty->getLabel();
 			}
 			$columnDefs[] = $colDef;
 			// Stored printout must yield the same label: "prop=label" unless label === prop.
@@ -200,6 +217,11 @@ class LuaLibrary extends LibraryBase {
 			'mainlabel' => $mainlabelIsString ? $mainlabel : null,
 			'fields' => $fieldToProp,
 		];
+		// Omitted when empty so facet-free grids keep byte-identical specs (no
+		// spurious aggrid_source rewrites under the hash compare).
+		if ( $facets !== [] ) {
+			$spec['facets'] = $facets;
+		}
 
 		$parser = $this->getParser();
 		$parserOutput = $parser->getOutput();
@@ -264,14 +286,16 @@ class LuaLibrary extends LibraryBase {
 	/**
 	 * Parse the printouts descriptor into a list of [ prop, label, options ] triples.
 	 *
-	 * Entries may be a plain string ('Population'), a 'prop=label' string, or a
-	 * table { prop = ..., label = ..., type = ..., cellRendererParams = ..., format = ... }.
-	 * The options bag carries display-only presentation keys (type, cellRendererParams,
-	 * format) that ride in the placeholder's gridOptions attribute; they are not part of
-	 * the stored query spec.
+	 * Entries may be a plain string ('Population'), a 'prop=label' string, or a table
+	 * { prop = ..., label = ..., type = ..., cellRendererParams = ..., format = ...,
+	 * filterProp = ... }. The display-only presentation keys (type, cellRendererParams,
+	 * format) ride in the placeholder's gridOptions attribute and are not part of the
+	 * stored query spec. filterProp is different: it feeds the stored query spec — it
+	 * declares the property the column's filter lists and matches.
 	 *
 	 * @param mixed $printouts
-	 * @return array<int, array{0: string, 1: string, 2: array}> Options bag keys: type?, cellRendererParams?, format?
+	 * @return array<int, array{0: string, 1: string, 2: array}> Options bag keys:
+	 *   type?, cellRendererParams?, format? (display-only), filterProp? (feeds the spec)
 	 * @throws LuaError If empty or an entry lacks a property name.
 	 */
 	private function parsePrintouts( $printouts ): array {
@@ -308,6 +332,18 @@ class LuaLibrary extends LibraryBase {
 				if ( isset( $entry['format'] ) && is_array( $entry['format'] ) ) {
 					$options['format'] = $entry['format'];
 				}
+				// Filter facet (issue #20): unlike the display-only keys above, this DOES
+				// feed the stored query spec — the server lists and filters on it. Silent
+				// type-gating only degrades presentation for the keys above; a silently
+				// dropped facet would change filtering semantics, so reject it here.
+				if ( isset( $entry['filterProp'] ) ) {
+					if ( !is_string( $entry['filterProp'] ) ) {
+						throw new LuaError(
+							'mw.ext.aggrid.render: filterProp must be a string property name'
+						);
+					}
+					$options['filterProp'] = trim( $entry['filterProp'] );
+				}
 			} else {
 				$prop = '';
 				$label = '';
@@ -323,6 +359,42 @@ class LuaLibrary extends LibraryBase {
 		}
 
 		return $parsed;
+	}
+
+	/**
+	 * Validate a printout's filterProp into a DIProperty, or null when absent or
+	 * identical to the display property (a redundant facet adds nothing and would
+	 * only churn the stored spec).
+	 *
+	 * Parse time is the only author-feedback point — request-time failures surface
+	 * as opaque 400s — so an invalid facet must die here as a LuaError.
+	 *
+	 * @throws LuaError If the facet property is invalid.
+	 */
+	private function resolveFacetProperty( ?string $facetProp, DIProperty $displayProperty ): ?DIProperty {
+		if ( $facetProp === null ) {
+			return null;
+		}
+		try {
+			$property = DIProperty::newFromUserLabel( $facetProp );
+		} catch ( RuntimeException ) {
+			throw new LuaError( 'mw.ext.aggrid.render: invalid filter property "' . $facetProp . '"' );
+		}
+		// Defensive parity with renderSource's printout loop: some SMW versions
+		// return null on malformed labels even though the current signature is `self`.
+		// @phan-suppress-next-line PhanImpossibleTypeComparison
+		if ( $property === null ) {
+			throw new LuaError( 'mw.ext.aggrid.render: invalid filter property "' . $facetProp . '"' );
+		}
+		if ( $property->getKey() === $displayProperty->getKey() ) {
+			return null;
+		}
+		// Label-less predefined properties (e.g. '_SKEY') construct fine but have no
+		// user label; letting one through would store a degenerate '' facet label.
+		if ( $property->getLabel() === '' ) {
+			throw new LuaError( 'mw.ext.aggrid.render: invalid filter property "' . $facetProp . '"' );
+		}
+		return $property;
 	}
 
 	/**
