@@ -90,6 +90,16 @@ class TypeColumnMapper {
 	}
 
 	/**
+	 * Resolve the AG Grid filter component for an SMW type id.
+	 *
+	 * Returns the component name (e.g. 'aggridSet'), or false when the datatype
+	 * does not support filtering.
+	 */
+	public function filterComponent( string $typeId ): string|false {
+		return $this->descriptor( $typeId )['filter'];
+	}
+
+	/**
 	 * Classify an SMW type id into a filter family.
 	 *
 	 * Returns one of: 'text' | 'number' | 'date' | 'boolean' | 'set' | 'none'.

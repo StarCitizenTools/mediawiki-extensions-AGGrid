@@ -236,13 +236,25 @@ The getter receives AG Grid's
 works unchanged. A `null`/empty return collapses into the `(Blanks)` bucket like any other
 value.
 
-Two limits, by design:
+Two boundaries, by design:
 
 - **Function form only.** AG Grid also accepts a string expression (`'data.manufacturer'`), but
   AGGrid doesn't evaluate expressions — a string is ignored and the column falls back to its
   display scalar. The getter reaches the colDef through this hook anyway, so write a function.
-- **Client-side grids only.** On a Semantic MediaWiki source grid the value list comes from the
-  server and filtering happens in the SMW query, so `filterValueGetter` is a no-op there.
+- **Backend (SMW) grids declare the facet in Lua instead.** On a Semantic MediaWiki source
+  grid the value list comes from the server and filtering happens in the SMW query, so a JS
+  getter has nothing to influence. Set `filterProp` on the printout entry instead — the
+  server lists and filters on that property while the column keeps displaying and sorting
+  on its own:
+
+  ```lua
+  printouts = {
+      { prop = 'Has name', label = 'Name', filterProp = 'Has manufacturer' },
+  },
+  ```
+
+  The filter UI follows the facet's datatype (a page-valued facet gets the set filter, a
+  number facet the number filter), and sorting stays on the display property.
 
 ### Icons in the filter list: `filterParams.itemRenderer`
 

@@ -5,8 +5,9 @@
 // derived from the loaded rows via each column's display scalar — the same valueFormatter
 // output that sort and quick-search use — so a rich link/image column filters on its text,
 // not the raw object. A colDef may override this with a function `filterValueGetter`
-// (client-side only; the server-backed path filters in the SMW query) to filter on a
-// different facet than it sorts/searches on. Every label is built as a text node unless a
+// (client-side grids; a backend SMW column declares `filterProp` on its printout in Lua
+// instead — the server lists and filters on that property) to filter on a different facet
+// than it sorts/searches on. Every label is built as a text node unless a
 // `filterParams.itemRenderer` is supplied; nothing built here uses innerHTML.
 
 // Empty/null/undefined values collapse under this single key (shown as the blanks message).

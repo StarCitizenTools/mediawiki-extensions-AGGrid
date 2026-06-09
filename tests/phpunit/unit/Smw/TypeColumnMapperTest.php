@@ -170,4 +170,17 @@ class TypeColumnMapperTest extends MediaWikiUnitTestCase {
 	public function testFilterFamilyNoneForUnknown(): void {
 		$this->assertSame( 'none', $this->mapper->filterFamily( '_unknown_type' ) );
 	}
+
+	// -------------------------------------------------------------------------
+	// filterComponent() — component name per datatype, false for unfilterable
+	// -------------------------------------------------------------------------
+
+	public function testFilterComponent(): void {
+		$this->assertSame( 'aggridSet', $this->mapper->filterComponent( '_wpg' ) );
+		$this->assertSame( 'agNumberColumnFilter', $this->mapper->filterComponent( '_num' ) );
+		$this->assertSame( 'agDateColumnFilter', $this->mapper->filterComponent( '_dat' ) );
+		$this->assertFalse( $this->mapper->filterComponent( '_geo' ), 'geo has no filter' );
+		$this->assertFalse( $this->mapper->filterComponent( '_rec' ), 'records have no filter' );
+		$this->assertFalse( $this->mapper->filterComponent( '_unknown' ), 'unknown ids fall back to none' );
+	}
 }

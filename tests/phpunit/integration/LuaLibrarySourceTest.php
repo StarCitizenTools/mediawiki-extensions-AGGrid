@@ -300,6 +300,119 @@ class LuaLibrarySourceTest extends MediaWikiIntegrationTestCase {
 		$this->assertArrayNotHasKey( 'format', $columnDefs[1] );
 	}
 
+	public function testFilterPropStoresFacetAndOverridesFilterComponent(): void {
+		$parser = $this->newStartedParser();
+		$result = $this->newLibrary( $parser )->render( [
+			'source' => [
+				'type' => 'smw',
+				'query' => '[[Category:Ship]]',
+				'printouts' => [
+					[ 'prop' => 'Has name', 'label' => 'Name', 'filterProp' => 'Has manufacturer' ],
+					'Has length',
+				],
+			],
+		] );
+		$this->assertCount( 1, $result );
+
+		$spec = $parser->getOutput()
+			->getExtensionData( GridRenderer::SOURCE_EXT_DATA_KEY . '0' )['spec'];
+		// Only the faceted column appears in the map; the canonical facet label is stored.
+		$this->assertSame( [ 'Name' => 'Has manufacturer' ], $spec['facets'] );
+
+		$columnDefs = $this->viewConfigFromPlaceholder( $parser, $result[0] )['columnDefs'];
+		// Undeclared properties default to the Page datatype (_wpg) on the test wiki, so
+		// the facet-derived component is the set filter. (A facet whose datatype differs
+		// from the display property's is exercised in the browser smoke task, where real
+		// typed properties exist.)
+		$this->assertSame( 'aggridSet', $columnDefs[1]['filter'] );
+		// The facet is a stored-spec concern; it must not leak into client colDef JSON.
+		$this->assertArrayNotHasKey( 'filterProp', $columnDefs[1] );
+	}
+
+	public function testNoFacetsOmitsSpecKey(): void {
+		$parser = $this->newStartedParser();
+		$this->newLibrary( $parser )->render( [
+			'source' => [
+				'type' => 'smw',
+				'query' => '[[Category:City]]',
+				'printouts' => [ 'Has population' ],
+			],
+		] );
+		$spec = $parser->getOutput()
+			->getExtensionData( GridRenderer::SOURCE_EXT_DATA_KEY . '0' )['spec'];
+		$this->assertArrayNotHasKey(
+			'facets',
+			$spec,
+			'facet-free grids keep byte-identical specs (no spurious aggrid_source rewrites)'
+		);
+	}
+
+	public function testRedundantFilterPropIsNormalizedAway(): void {
+		$parser = $this->newStartedParser();
+		$this->newLibrary( $parser )->render( [
+			'source' => [
+				'type' => 'smw',
+				'query' => '[[Category:City]]',
+				'printouts' => [ [ 'prop' => 'Has name', 'filterProp' => 'Has name' ] ],
+			],
+		] );
+		$spec = $parser->getOutput()
+			->getExtensionData( GridRenderer::SOURCE_EXT_DATA_KEY . '0' )['spec'];
+		$this->assertArrayNotHasKey( 'facets', $spec, 'a facet equal to the display property is a no-op' );
+	}
+
+	public function testInvalidFilterPropThrows(): void {
+		// A bare underscore is rejected by DIProperty::newFromUserLabel.
+		$this->expectException( LuaError::class );
+		$this->newLibrary( $this->newStartedParser() )->render( [
+			'source' => [
+				'type' => 'smw',
+				'query' => '[[Category:City]]',
+				'printouts' => [ [ 'prop' => 'Has name', 'filterProp' => '_' ] ],
+			],
+		] );
+	}
+
+	public function testNonStringFilterPropThrows(): void {
+		// A silently dropped facet would change filtering semantics (the column would
+		// quietly filter on the display property), so a non-string filterProp must die
+		// at parse time — the only author-feedback point.
+		$this->expectException( LuaError::class );
+		$this->newLibrary( $this->newStartedParser() )->render( [
+			'source' => [
+				'type' => 'smw',
+				'query' => '[[Category:City]]',
+				'printouts' => [ [ 'prop' => 'Has name', 'filterProp' => 123 ] ],
+			],
+		] );
+	}
+
+	public function testBlankFilterPropThrows(): void {
+		// Whitespace trims to '', and DIProperty::newFromUserLabel( '' ) throws
+		// PropertyLabelNotResolvedException (a RuntimeException) -> LuaError.
+		$this->expectException( LuaError::class );
+		$this->newLibrary( $this->newStartedParser() )->render( [
+			'source' => [
+				'type' => 'smw',
+				'query' => '[[Category:City]]',
+				'printouts' => [ [ 'prop' => 'Has name', 'filterProp' => '  ' ] ],
+			],
+		] );
+	}
+
+	public function testLabelLessPredefinedFilterPropThrows(): void {
+		// _SKEY constructs fine (a registered predefined property) but its
+		// getLabel() is '' — a degenerate facet label that must not reach the spec.
+		$this->expectException( LuaError::class );
+		$this->newLibrary( $this->newStartedParser() )->render( [
+			'source' => [
+				'type' => 'smw',
+				'query' => '[[Category:City]]',
+				'printouts' => [ [ 'prop' => 'Has name', 'filterProp' => '_SKEY' ] ],
+			],
+		] );
+	}
+
 	public function testInlineRenderStillWorks(): void {
 		$parser = $this->newStartedParser();
 		$result = $this->newLibrary( $parser )->render( [

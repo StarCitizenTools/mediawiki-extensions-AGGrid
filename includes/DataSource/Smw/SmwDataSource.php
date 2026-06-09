@@ -77,20 +77,21 @@ class SmwDataSource implements BackendDataSource {
 	): GridPage {
 		$spec = $this->resolveSpec( $pageId, $gridIndex );
 
-		// A printout column field may be an alias for a different SMW property; map
-		// the AG Grid field (colId / filterModel key) to the real property before any
-		// SMW resolution, so aliased columns sort/filter on the property, not the alias.
-		$propertyOf = $this->propertyResolver( $spec );
+		// Two resolver views over the declared columns: sorting follows the column's
+		// display property; filtering follows its facet when one is declared. Both
+		// are closed — an undeclared field throws (-> 400 in the REST handlers).
+		$displayOf = $this->displayPropertyResolver( $spec );
+		$filterOf = $this->filterPropertyResolver( $spec );
 
 		return $this->withRaisedLimits( function () use (
-			$spec, $propertyOf, $offset, $size, $sortModel, $filterModel
+			$spec, $displayOf, $filterOf, $offset, $size, $sortModel, $filterModel
 		): GridPage {
 			$query = $this->buildQuery( $spec, $spec['printouts'] ?? [] );
 			$query->setOffset( $offset );
 			$query->setLimit( $size );
-			$query->setSortKeys( $this->filterTranslator->toSortKeys( $sortModel, $propertyOf ) );
+			$query->setSortKeys( $this->filterTranslator->toSortKeys( $sortModel, $displayOf ) );
 
-			$filterDesc = $this->buildFilterDescription( $filterModel, $propertyOf );
+			$filterDesc = $this->buildFilterDescription( $filterModel, $filterOf );
 			if ( $filterDesc !== null ) {
 				$query->setDescription( new Conjunction( [ $query->getDescription(), $filterDesc ] ) );
 			}
@@ -117,8 +118,10 @@ class SmwDataSource implements BackendDataSource {
 	public function getColumnValues( int $pageId, int $gridIndex, string $column ): array {
 		$spec = $this->resolveSpec( $pageId, $gridIndex );
 
-		// $column is the AG Grid field (possibly an alias); project the real property.
-		$prop = $spec['fields'][$column] ?? $column;
+		// $column is the AG Grid field; filtering resolves through the facet when one
+		// is declared, so the value list enumerates the same property the filter
+		// conditions will run against. Undeclared columns throw (-> 400).
+		$prop = $this->filterPropertyResolver( $spec )( $column );
 
 		return $this->withRaisedLimits( function () use ( $spec, $prop ): array {
 			$query = $this->buildQuery( $spec, [ $prop ] );
@@ -136,15 +139,13 @@ class SmwDataSource implements BackendDataSource {
 					if ( $resultArray->getPrintRequest()->getMode() === PrintRequest::PRINT_THIS ) {
 						continue;
 					}
-					$cell = $this->firstCellValue( $resultArray );
-					if ( $cell === null ) {
-						continue;
+					foreach ( $this->cellValues( $resultArray ) as $cell ) {
+						$label = is_array( $cell ) ? $cell['text'] : $cell;
+						if ( $label === '' ) {
+							continue;
+						}
+						$values[$label] = [ 'key' => $label, 'label' => $label ];
 					}
-					$label = is_array( $cell ) ? $cell['text'] : $cell;
-					if ( $label === '' ) {
-						continue;
-					}
-					$values[$label] = [ 'key' => $label, 'label' => $label ];
 				}
 				$resultRow = $result->getNext();
 			}
@@ -181,13 +182,14 @@ class SmwDataSource implements BackendDataSource {
 	 * Called only from within getPage()'s withRaisedLimits() scope, so its
 	 * setDescription() prune sees the raised structural limits.
 	 *
-	 * @param array{query: string, printouts?: string[], mainlabel?: ?string, fields?: array<string,string>} $spec
+	 * @phpcs:ignore Generic.Files.LineLength
+	 * @param array{query: string, printouts?: string[], mainlabel?: ?string, fields?: array<string,string>, facets?: array<string,string>} $spec
 	 * @param array<string, array<string,mixed>> $filterModel
 	 */
 	private function countFor( array $spec, array $filterModel ): int {
 		$countQuery = $this->buildQuery( $spec, [] );
 
-		$filterDesc = $this->buildFilterDescription( $filterModel, $this->propertyResolver( $spec ) );
+		$filterDesc = $this->buildFilterDescription( $filterModel, $this->filterPropertyResolver( $spec ) );
 		if ( $filterDesc !== null ) {
 			$countQuery->setDescription(
 				new Conjunction( [ $countQuery->getDescription(), $filterDesc ] )
@@ -227,21 +229,77 @@ class SmwDataSource implements BackendDataSource {
 	}
 
 	/**
-	 * Build a field->property resolver backed by the spec's stored alias map.
-	 * Falls back to the field itself when no mapping exists (field == property).
+	 * Build a field -> display-property resolver over the spec's declared columns.
 	 *
-	 * @param array{fields?: array<string,string>} $spec
+	 * Resolution is closed: clients name columns only by colId/field, and only
+	 * author-declared printouts resolve. An undeclared field throws, which the
+	 * REST handlers surface as a 400 — the previous fall-through (treat the
+	 * request string as a property name) let a client list values of, filter on,
+	 * and sort by ANY wiki property, gated only by page read permission.
+	 *
+	 * @param array{printouts?: string[], fields?: array<string,string>} $spec
 	 * @return callable Callable( string $field ): string
 	 */
-	private function propertyResolver( array $spec ): callable {
+	private function displayPropertyResolver( array $spec ): callable {
+		$fields = $this->declaredFields( $spec );
+		return static function ( string $field ) use ( $fields ): string {
+			if ( !isset( $fields[$field] ) ) {
+				throw new RuntimeException( "AGGrid: undeclared column \"$field\"" );
+			}
+			return $fields[$field];
+		};
+	}
+
+	/**
+	 * Build a field -> property resolver for FILTERING: a declared filter facet
+	 * overrides the display property, so the filter (value list and conditions)
+	 * operates on the facet while sort and display stay on the display property.
+	 *
+	 * @param array{printouts?: string[], fields?: array<string,string>, facets?: array<string,string>} $spec
+	 * @return callable Callable( string $field ): string
+	 */
+	private function filterPropertyResolver( array $spec ): callable {
+		$displayOf = $this->displayPropertyResolver( $spec );
+		$facets = $spec['facets'] ?? [];
+		return static function ( string $field ) use ( $displayOf, $facets ): string {
+			// Resolve the display property first: it validates the declaration
+			// even when a facet overrides the result.
+			$prop = $displayOf( $field );
+			return $facets[$field] ?? $prop;
+		};
+	}
+
+	/**
+	 * field -> display property for every declared printout.
+	 *
+	 * Prefers the stored fields map; for specs lacking one, defensively derives
+	 * the same mapping renderSource would have stored from the canonical
+	 * printout strings ('Prop' or 'Prop=Label').
+	 *
+	 * @param array{printouts?: string[], fields?: array<string,string>} $spec
+	 * @return array<string,string>
+	 */
+	private function declaredFields( array $spec ): array {
 		$fields = $spec['fields'] ?? [];
-		return static fn ( string $field ): string => $fields[$field] ?? $field;
+		if ( $fields !== [] ) {
+			return $fields;
+		}
+		foreach ( $spec['printouts'] ?? [] as $printout ) {
+			if ( str_contains( $printout, '=' ) ) {
+				[ $prop, $label ] = explode( '=', $printout, 2 );
+				$fields[$label] = $prop;
+			} else {
+				$fields[$printout] = $printout;
+			}
+		}
+		return $fields;
 	}
 
 	/**
 	 * Resolve and validate the stored source spec for a grid.
 	 *
-	 * @return array{query: string, printouts?: string[], mainlabel?: ?string, fields?: array<string,string>}
+	 * @phpcs:ignore Generic.Files.LineLength
+	 * @return array{query: string, printouts?: string[], mainlabel?: ?string, fields?: array<string,string>, facets?: array<string,string>}
 	 */
 	private function resolveSpec( int $pageId, int $gridIndex ): array {
 		$source = $this->specStore->getSource( $pageId, $gridIndex );
@@ -329,6 +387,28 @@ class SmwDataSource implements BackendDataSource {
 			return null;
 		}
 		return $this->cellFromDataValue( $dataValue );
+	}
+
+	/**
+	 * Read every DataValue of a ResultArray, mapped to cell values.
+	 *
+	 * The set-filter value list must enumerate ALL of a row's values for the
+	 * property: an SMW SomeProperty condition matches a row when ANY value
+	 * matches, so a list built from first values only offers entries that cannot
+	 * be coherently deselected on multi-valued properties. Row cells (mapRow)
+	 * intentionally keep first-value-only display. Values per row are
+	 * intentionally uncapped; maxValues/partial stay row-based.
+	 *
+	 * @return array<int, array{text: string, href: string}|string>
+	 */
+	private function cellValues( ResultArray $resultArray ): array {
+		$cells = [];
+		$dataValue = $resultArray->getNextDataValue();
+		while ( $dataValue !== false ) {
+			$cells[] = $this->cellFromDataValue( $dataValue );
+			$dataValue = $resultArray->getNextDataValue();
+		}
+		return $cells;
 	}
 
 	/**

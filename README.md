@@ -101,7 +101,7 @@ mw.ext.aggrid.render{
 
 The popup lists each unique value with a row count, a search box for long lists, a tri-state "select all", and a `(Blanks)` entry for empty cells. On rich columns (`linkColumn`, `imageColumn`, `linkListColumn`) it filters on the displayed text, matching how sort and quick-search behave. The value list is taken from all loaded rows; it is not narrowed by other columns' active filters.
 
-A custom column type can override this from JavaScript: `filterValueGetter` filters on a different facet than the column sorts and searches on, and `filterParams.itemRenderer` draws icons or markup beside each value. See [`docs/extending-column-types.md`](docs/extending-column-types.md#rich-set-filters-and-the-grid-api).
+A custom column type can override this from JavaScript: `filterValueGetter` filters on a different facet than the column sorts and searches on, and `filterParams.itemRenderer` draws icons or markup beside each value. On backend (SMW) grids the same idea is declared in Lua instead: set `filterProp` on a printout to list and filter on a different property than the column displays and sorts on. See [`docs/extending-column-types.md`](docs/extending-column-types.md#rich-set-filters-and-the-grid-api).
 
 ## 🔢 Formatting numbers and dates
 
