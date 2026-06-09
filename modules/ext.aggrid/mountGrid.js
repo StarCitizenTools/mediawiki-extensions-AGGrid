@@ -141,7 +141,7 @@ function prepareGridOptions( el, gridOptions ) {
 function createAndAnnounce( el, gridOptions ) {
 	// agGrid is the global exposed by the vendored AG Grid bundle.
 	const api = agGrid.createGrid( el, gridOptions );
-	if ( mw.hook ) {
+	if ( typeof mw !== 'undefined' && mw.hook ) {
 		mw.hook( 'ext.aggrid.gridReady' ).fire( api, el, gridOptions );
 	}
 	return api;

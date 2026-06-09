@@ -86,6 +86,20 @@ describe( 'mountGrid', () => {
 		delete global.mw.hook;
 	} );
 
+	it( 'fires ext.aggrid.gridReady on the backend mount path', () => {
+		global.agGrid.createGrid = vi.fn().mockReturnValue( { id: 'api' } );
+		const fires = mockHooks();
+
+		// makeBackendEl (defined later in this describe) is hoisted; it carries a
+		// data-mw-aggrid-source + a complete handle so mountBackend runs.
+		const el = makeBackendEl( '{"columnDefs":[{"field":"name"}]}' );
+		mountGrid( el );
+
+		expect( fires[ 'ext.aggrid.gridReady' ] ).toHaveBeenCalledTimes( 1 );
+
+		delete global.mw.hook;
+	} );
+
 	it( 'does not mount the same element twice', () => {
 		const el = makeEl( '{"columnDefs":[{"field":"name"}],"rowData":[]}' );
 		mountGrid( el );
