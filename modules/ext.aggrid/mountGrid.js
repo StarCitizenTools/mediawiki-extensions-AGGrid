@@ -129,6 +129,25 @@ function prepareGridOptions( el, gridOptions ) {
 }
 
 /**
+ * Create the grid and announce it so gadgets/skins can grab the api after mount
+ * (wire a search box, external filters, toolbar controls, programmatic control).
+ * Single fire site for every mount path (inline, backend, error). Guarded so the
+ * vitest harness — which has no mw.hook — is unaffected, matching registry.js.
+ *
+ * @param {HTMLElement} el The .ext-aggrid container.
+ * @param {Object} gridOptions Fully-prepared gridOptions.
+ * @return {Object} The AG Grid GridApi.
+ */
+function createAndAnnounce( el, gridOptions ) {
+	// agGrid is the global exposed by the vendored AG Grid bundle.
+	const api = agGrid.createGrid( el, gridOptions );
+	if ( typeof mw !== 'undefined' && mw.hook ) {
+		mw.hook( 'ext.aggrid.gridReady' ).fire( api, el, gridOptions );
+	}
+	return api;
+}
+
+/**
  * Drop the loading skeleton/busy state and create the grid.
  *
  * @param {HTMLElement} el The .ext-aggrid container.
@@ -136,8 +155,7 @@ function prepareGridOptions( el, gridOptions ) {
  */
 function finishMount( el, gridOptions ) {
 	prepareGridOptions( el, gridOptions );
-	// agGrid is the global exposed by the vendored AG Grid bundle.
-	agGrid.createGrid( el, gridOptions );
+	createAndAnnounce( el, gridOptions );
 }
 
 /**
@@ -275,7 +293,7 @@ function mountBackend( el, gridOptions ) {
 	gridOptions.datasource = datasource;
 
 	// The Infinite Row Model fetches block 0 automatically on mount.
-	agGrid.createGrid( el, gridOptions );
+	createAndAnnounce( el, gridOptions );
 }
 
 /**

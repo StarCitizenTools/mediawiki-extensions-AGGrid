@@ -1,17 +1,44 @@
 // Custom AG Grid (Community) Set Filter: a checkbox list of a column's unique values.
 //
 // AG Grid Community ships no Set Filter; this is a vanilla IFilterComp registered by name
-// (aggridSet) and referenced from a colDef as `filter: 'aggridSet'`. Values are derived
-// from the loaded rows via each column's display scalar — the same valueFormatter output
-// that sort and quick-search use — so a rich link/image column filters on its text, not the
-// raw object. Every label is built as a text node; nothing uses innerHTML.
+// (aggridSet) and referenced from a colDef as `filter: 'aggridSet'`. By default values are
+// derived from the loaded rows via each column's display scalar — the same valueFormatter
+// output that sort and quick-search use — so a rich link/image column filters on its text,
+// not the raw object. A colDef may override this with a function `filterValueGetter`
+// (client-side only; the server-backed path filters in the SMW query) to filter on a
+// different facet than it sorts/searches on. Every label is built as a text node unless a
+// `filterParams.itemRenderer` is supplied; nothing built here uses innerHTML.
 
 // Empty/null/undefined values collapse under this single key (shown as the blanks message).
 const BLANK_KEY = '';
 
-// A node's display value for this column: the valueFormatter output when the column has one
-// (rich columns do), else the raw value. getCellValue with useFormatter is the v32+ API.
-function displayValue( api, column, node ) {
+// Resolve a colDef's filterValueGetter to a node -> value function, or null to use the
+// formatted cell value. Function form only (a string expression is ignored — we don't eval);
+// client-side only. The params mirror AG Grid's ValueGetterParams so a getter written against
+// the AG Grid docs works unchanged.
+function resolveValueGetter( params ) {
+	const getter = params.colDef && params.colDef.filterValueGetter;
+	if ( typeof getter !== 'function' ) {
+		return null;
+	}
+	const api = params.api;
+	return ( node ) => getter( {
+		api,
+		colDef: params.colDef,
+		column: params.column,
+		node,
+		data: node.data,
+		getValue: ( field ) => api.getCellValue( { rowNode: node, colKey: field } )
+	} );
+}
+
+// A node's value for this column: a caller-supplied valueGetter when present, else the
+// valueFormatter output when the column has one (rich columns do) or the raw value.
+// getCellValue with useFormatter is the v32+ API.
+function displayValue( api, column, node, valueGetter ) {
+	if ( valueGetter ) {
+		return valueGetter( node );
+	}
 	return api.getCellValue( { rowNode: node, colKey: column, useFormatter: true } );
 }
 
@@ -39,12 +66,13 @@ function compareLabels( a, b ) {
  *
  * @param {Object} api AG Grid GridApi.
  * @param {Object} column AG Grid Column (or column id).
+ * @param {Function} [valueGetter] Optional node -> value function (from filterValueGetter).
  * @return {Map<string,number>} Insertion-ordered key → row count.
  */
-function deriveValues( api, column ) {
+function deriveValues( api, column, valueGetter ) {
 	const counts = new Map();
 	api.forEachLeafNode( ( node ) => {
-		const key = keyOf( displayValue( api, column, node ) );
+		const key = keyOf( displayValue( api, column, node, valueGetter ) );
 		counts.set( key, ( counts.get( key ) || 0 ) + 1 );
 	} );
 	return counts;
@@ -77,9 +105,20 @@ function setCheckState( box, input, checked, indeterminate ) {
 	box.classList.toggle( 'ag-indeterminate', indeterminate );
 }
 
+// Resolve a colDef's filterParams.itemRenderer to a function, or null. Used to render the
+// value cell of value rows (never the select-all row). XSS responsibility sits with the
+// caller — the same contract as a cellRenderer.
+function resolveItemRenderer( params ) {
+	const fp = params.colDef && params.colDef.filterParams;
+	const renderer = fp && fp.itemRenderer;
+	return typeof renderer === 'function' ? renderer : null;
+}
+
 // Build a set-filter item's checkbox + value label, mirroring AG Grid's themed ag-checkbox
-// markup. Starts checked (the filter opens with every value selected).
-function makeItemCheckbox( text ) {
+// markup. Starts checked (the filter opens with every value selected). When itemRenderer is a
+// function its returned Node populates the value cell (value rows only); otherwise a plain text
+// node is used. key/count are passed through to the renderer for context.
+function makeItemCheckbox( text, itemRenderer, key, count ) {
 	const field = setClass( document.createElement( 'div' ),
 		'ag-labeled ag-label-align-right ag-checkbox ag-input-field ag-set-filter-item-checkbox' );
 	const wrapper = setClass( document.createElement( 'span' ),
@@ -93,7 +132,13 @@ function makeItemCheckbox( text ) {
 	wrapper.appendChild( input );
 	const value = setClass( document.createElement( 'span' ),
 		'ag-label ag-set-filter-item-value ext-aggrid-setfilter__text' );
-	value.textContent = text;
+	const node = typeof itemRenderer === 'function' ?
+		itemRenderer( { label: text, key, count } ) : null;
+	if ( node ) {
+		value.appendChild( node );
+	} else {
+		value.textContent = text;
+	}
 	field.appendChild( wrapper );
 	field.appendChild( value );
 	return { field, wrapper, input };
@@ -105,6 +150,8 @@ function makeItemCheckbox( text ) {
 class SetFilter {
 	init( params ) {
 		this.params = params;
+		this.valueGetter = resolveValueGetter( params );
+		this.itemRenderer = resolveItemRenderer( params );
 		const valuesSource = params.colDef &&
 			params.colDef.filterParams &&
 			params.colDef.filterParams.valuesSource;
@@ -118,7 +165,7 @@ class SetFilter {
 	}
 
 	initClientSide() {
-		this.counts = deriveValues( this.params.api, this.params.column );
+		this.counts = deriveValues( this.params.api, this.params.column, this.valueGetter );
 		this.allKeys = Array.from( this.counts.keys() );
 		// Inactive to start: every value selected.
 		this.selected = new Set( this.allKeys );
@@ -173,7 +220,7 @@ class SetFilter {
 			// Populate the list with server-provided values.
 			this.items = [];
 			sorted.forEach( ( v ) => {
-				const cb = makeItemCheckbox( v.label );
+				const cb = makeItemCheckbox( v.label, this.itemRenderer, v.key, null );
 				cb.input.addEventListener( 'change', () => this.onToggle( v.key, cb.input.checked ) );
 				// Pass null for count so no count suffix is rendered.
 				const row = this.buildRow( 'ext-aggrid-setfilter__item--value', cb, null );
@@ -219,7 +266,9 @@ class SetFilter {
 		if ( this.serverBacked ) {
 			return true;
 		}
-		const key = keyOf( displayValue( this.params.api, this.params.column, params.node ) );
+		const key = keyOf(
+			displayValue( this.params.api, this.params.column, params.node, this.valueGetter )
+		);
 		return this.selected.has( key );
 	}
 
@@ -300,7 +349,7 @@ class SetFilter {
 			return compareLabels( a.label, b.label );
 		} );
 		values.forEach( ( v ) => {
-			const cb = makeItemCheckbox( v.label );
+			const cb = makeItemCheckbox( v.label, this.itemRenderer, v.key, v.count );
 			cb.input.addEventListener( 'change', () => this.onToggle( v.key, cb.input.checked ) );
 			const row = this.buildRow( 'ext-aggrid-setfilter__item--value', cb, v.count );
 			this.items.push(
