@@ -18,4 +18,12 @@ if ( is_dir( $smwDir ) ) {
 	$cfg['exclude_analysis_directory_list'][] = $smwDir;
 }
 
+// Bucket is an optional (soft) dependency — the Bucket data source references its
+// Bucket/BucketQuery/BucketDatabase classes. Include it for type resolution when present.
+$bucketDir = __DIR__ . '/../../../extensions/Bucket';
+if ( is_dir( $bucketDir ) ) {
+	$cfg['directory_list'][] = $bucketDir;
+	$cfg['exclude_analysis_directory_list'][] = $bucketDir;
+}
+
 return $cfg;

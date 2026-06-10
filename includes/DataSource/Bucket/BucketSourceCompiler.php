@@ -73,6 +73,7 @@ class BucketSourceCompiler {
 
 	/**
 	 * @param mixed $bucket
+	 * @throws LuaError
 	 */
 	private function parseBucket( $bucket ): string {
 		if ( !is_string( $bucket ) || trim( $bucket ) === '' ) {
@@ -86,6 +87,7 @@ class BucketSourceCompiler {
 	 *
 	 * @param string $bucket
 	 * @return array<string, array{type: string, repeated: bool, indexed: bool}>
+	 * @throws LuaError
 	 */
 	private function loadSchema( string $bucket ): array {
 		$fields = $this->schemaReader->getFields( $bucket );
@@ -100,6 +102,7 @@ class BucketSourceCompiler {
 	 *
 	 * @param mixed $joins
 	 * @return array<int, array{bucket: string, on: array{0: string, 1: string}}>
+	 * @throws LuaError
 	 */
 	private function parseJoins( $joins ): array {
 		if ( $joins === null ) {
@@ -135,6 +138,7 @@ class BucketSourceCompiler {
 	 * @param string $bucket Primary bucket name.
 	 * @param array $schemas bucket name -> field schema map.
 	 * @return array{0: array, 1: string[], 2: array<string, array{select:string,type:string,repeated:bool}>}
+	 * @throws LuaError
 	 */
 	private function parseFields( $fields, string $bucket, array $schemas ): array {
 		if ( !is_array( $fields ) || $fields === [] ) {
@@ -168,6 +172,7 @@ class BucketSourceCompiler {
 	 *
 	 * @param mixed $entry
 	 * @return array{0: string, 1: string, 2: array} [ select, label, opts ]
+	 * @throws LuaError
 	 */
 	private function parseFieldEntry( $entry ): array {
 		$opts = [];
@@ -211,6 +216,7 @@ class BucketSourceCompiler {
 	 * @param string $primaryBucket
 	 * @param array $schemas bucket name -> field schema map.
 	 * @return array{type: string, repeated: bool, indexed: bool}
+	 * @throws LuaError
 	 */
 	private function resolveField( string $select, string $primaryBucket, array $schemas ): array {
 		$parts = explode( '.', $select );
@@ -266,6 +272,7 @@ class BucketSourceCompiler {
 	 * @param string $bucket Primary bucket name.
 	 * @param array $schemas bucket name -> field schema map.
 	 * @return array<int, array{0: string, 1: string, 2: mixed}>
+	 * @throws LuaError
 	 */
 	private function parseWhere( $where, string $bucket, array $schemas ): array {
 		if ( $where === null ) {
@@ -307,6 +314,7 @@ class BucketSourceCompiler {
 	 * @param mixed $orderBy
 	 * @param string[] $selects
 	 * @return array{field: string, direction: string}|null
+	 * @throws LuaError
 	 */
 	private function parseOrderBy( $orderBy, array $selects ): ?array {
 		if ( $orderBy === null ) {

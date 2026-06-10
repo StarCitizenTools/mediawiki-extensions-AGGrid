@@ -22,8 +22,10 @@ end
 ---  * Backend source: supply a `source` descriptor and the grid is built from a
 ---    stored query (rows fetched on demand). When `source` is present, any author
 ---    `columnDefs`/`rowData` are ignored — columns are auto-derived from the
----    source's property datatypes. The `source` table fields are:
----      * type      string  @backend type; only 'smw' is supported in v1
+---    source's datatypes. `source.type` selects the backend ('smw' or 'bucket');
+---    each requires its extension to be installed.
+---
+--- SMW source (`type = 'smw'`) fields:
 ---      * query     string|table  @query condition string, or a sequence of
 ---                                 fragments joined with spaces, e.g.
 ---                                 { '[[Category:City]]', '[[Population::>1000]]' }
@@ -37,14 +39,34 @@ end
 ---      * mainlabel string|nil  @subject column header; '-' suppresses the subject
 ---                              column. Defaults to a 'Page' column.
 ---
+--- Bucket source (`type = 'bucket'`) fields:
+---      * bucket    string  @primary bucket name. Required.
+---      * fields    table   @sequence of columns; each entry is a plain field name
+---                          'value', or a table { field = 'value', label = 'Value',
+---                          type = ..., cellRendererParams = ..., format = ...,
+---                          filter = false }. A joined field is qualified
+---                          'skill.category'. ≥1 required. (page_name is a normal
+---                          Page field — list it to show a page-link column.)
+---      * join      table|nil  @sequence of joins; each is
+---                          { bucket = 'skill', on = { 'item.skill_required',
+---                          'skill.skill_name' } }.
+---      * where     table|nil  @base scope: a list of { field, operator, value }
+---                          conditions ANDed together. Operators: = ~= >= <= > <
+---                          (Bucket has no substring match).
+---      * orderBy   table|nil  @default sort { field = 'value', direction = 'DESC' };
+---                          the field must be one of `fields`.
+---    Bucket columns get a set filter (page/text/boolean) or a number filter
+---    (integer/double); there is no text 'contains' filter and no quick search,
+---    because Bucket's query language has no LIKE operator.
+---
 --- The extension also understands one non-AG-Grid gridOption:
 ---  * quickSearch boolean|table @opt-in quick-search box above the grid rows,
 ---                 wired to AG Grid's quick filter. `true` enables it with an
 ---                 i18n placeholder and a 200 ms debounce; a table overrides:
 ---                 { placeholder = 'Find ships…', debounceMs = 300 }
 ---                 (debounceMs is capped at 5000).
----                 Client-side grids only — ignored on `source` grids, where
----                 the quick filter cannot run (the rows live server-side).
+---                 Works on inline grids and SMW `source` grids; ignored on Bucket
+---                 `source` grids (no server-side substring search).
 ---
 --- @param gridOptions table @AG Grid gridOptions; inline (columnDefs + rowData) or { source = ... }
 --- @return string @The rendered grid placeholder wikitext
