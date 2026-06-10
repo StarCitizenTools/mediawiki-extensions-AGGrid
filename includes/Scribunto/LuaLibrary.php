@@ -4,10 +4,10 @@ declare( strict_types=1 );
 
 namespace MediaWiki\Extension\AGGrid\Scribunto;
 
+use InvalidArgumentException;
 use MediaWiki\Extension\Scribunto\Engines\LuaCommon\LibraryBase;
 use MediaWiki\Extension\Scribunto\Engines\LuaCommon\LuaError;
 use MediaWiki\MediaWikiServices;
-use MediaWiki\Registration\ExtensionRegistry;
 use MediaWiki\Title\Title;
 
 class LuaLibrary extends LibraryBase {
@@ -149,9 +149,10 @@ class LuaLibrary extends LibraryBase {
 	/**
 	 * Render a backend source grid from a `source` descriptor.
 	 *
-	 * Dispatches by `source.type` to a per-backend builder that produces type-aware
-	 * columnDefs and the stored query spec, then queues the spec (not rows) via
-	 * GridRenderer::renderSource(). Supported types: 'smw' and 'bucket'.
+	 * Resolves the backend for `source.type` via the BackendRegistry (the single dispatch
+	 * seam that also gates each backend on its required extension), asks it to compile the
+	 * descriptor into type-aware columnDefs and the stored query spec, then queues the spec
+	 * (not rows) via GridRenderer::renderSource().
 	 *
 	 * @param array $gridOptions gridOptions table carrying a `source` descriptor.
 	 * @return array
@@ -169,16 +170,25 @@ class LuaLibrary extends LibraryBase {
 		}
 		$type = trim( $type );
 
-		[ $columnDefs, $spec ] = $this->buildSource( $type, $source );
+		try {
+			$backend = MediaWikiServices::getInstance()
+				->getService( 'AGGrid.BackendRegistry' )
+				->get( $type );
+		} catch ( InvalidArgumentException $e ) {
+			// Unknown type and unavailable-extension both surface here with the same wording.
+			throw new LuaError( 'mw.ext.aggrid.render: ' . $e->getMessage() );
+		}
+
+		[ $columnDefs, $spec ] = $backend->compileSource( $source );
 
 		// Pass through any AG-Grid options the author set alongside `source`, then
 		// override columnDefs with the auto-built array (and drop rowData entirely).
 		$viewConfig = $gridOptions;
 		unset( $viewConfig['source'], $viewConfig['columnDefs'], $viewConfig['rowData'] );
 		$viewConfig['columnDefs'] = $columnDefs;
-		if ( $type === 'bucket' ) {
-			// Bucket has no server-side substring search, so the quick-search box would
-			// be inert — drop it rather than render a dead control.
+		if ( !$backend->supportsQuickSearch() ) {
+			// The backend has no server-side substring search, so the quick-search box
+			// would be inert — drop it rather than render a dead control.
 			unset( $viewConfig['quickSearch'] );
 		}
 
@@ -203,55 +213,10 @@ class LuaLibrary extends LibraryBase {
 				$pageId ?: null,
 				$revId ?: null,
 				$isPreview,
-				$type
+				$backend->getType()
 			);
 
 		return [ $parser->insertStripItem( $html ) ];
-	}
-
-	/**
-	 * Dispatch a source descriptor to its per-backend builder, returning
-	 * [ columnDefs, spec ]. Each backend requires its backing extension to be loaded.
-	 *
-	 * @param string $type Source type ('smw' | 'bucket').
-	 * @param array $source The `source` descriptor table.
-	 * @return array{0: array, 1: array} [ columnDefs, spec ]
-	 * @throws LuaError If the type is unknown or its extension is unavailable.
-	 */
-	private function buildSource( string $type, array $source ): array {
-		if ( $type === 'smw' ) {
-			if ( !ExtensionRegistry::getInstance()->isLoaded( 'SemanticMediaWiki' ) ) {
-				throw new LuaError(
-					'mw.ext.aggrid.render: source type "smw" requires the Semantic MediaWiki extension'
-				);
-			}
-			return $this->buildSmwSource( $source );
-		}
-		if ( $type === 'bucket' ) {
-			if ( !ExtensionRegistry::getInstance()->isLoaded( 'Bucket' ) ) {
-				throw new LuaError(
-					'mw.ext.aggrid.render: source type "bucket" requires the Bucket extension'
-				);
-			}
-			return MediaWikiServices::getInstance()
-				->getService( 'AGGrid.BucketSourceCompiler' )
-				->compile( $source );
-		}
-		throw new LuaError( 'mw.ext.aggrid.render: unknown source type "' . $type . '"' );
-	}
-
-	/**
-	 * Build type-aware columnDefs and the stored spec for an SMW `source` descriptor,
-	 * delegating to the SmwSourceCompiler service.
-	 *
-	 * @param array $source The `source` descriptor table.
-	 * @return array{0: array, 1: array} [ columnDefs, spec ]
-	 * @throws LuaError If the descriptor is invalid.
-	 */
-	private function buildSmwSource( array $source ): array {
-		return MediaWikiServices::getInstance()
-			->getService( 'AGGrid.SmwSourceCompiler' )
-			->compile( $source );
 	}
 
 	/**

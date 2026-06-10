@@ -191,6 +191,23 @@ class LuaLibrarySourceTest extends MediaWikiIntegrationTestCase {
 		] );
 	}
 
+	public function testQuickSearchKeptOnSmwGrids(): void {
+		$parser = $this->newStartedParser();
+		$result = $this->newLibrary( $parser )->render( [
+			'quickSearch' => true,
+			'source' => [
+				'type' => 'smw',
+				'query' => '[[Category:City]]',
+				'printouts' => [ 'Has population' ],
+			],
+		] );
+		$viewConfig = $this->viewConfigFromPlaceholder( $parser, $result[0] );
+		$this->assertTrue(
+			$viewConfig['quickSearch'],
+			'SMW supports server-side substring search, so quick search survives'
+		);
+	}
+
 	public function testMissingSourceTypeThrows(): void {
 		$this->expectException( LuaError::class );
 		$this->newLibrary( $this->newStartedParser() )->render( [

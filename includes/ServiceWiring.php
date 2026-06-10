@@ -3,7 +3,6 @@
 declare( strict_types=1 );
 
 use MediaWiki\Extension\AGGrid\DataSource\Backend;
-use MediaWiki\Extension\AGGrid\DataSource\BackendDataSource;
 use MediaWiki\Extension\AGGrid\DataSource\BackendDescriptor;
 use MediaWiki\Extension\AGGrid\DataSource\BackendRegistry;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketBackend;
@@ -13,7 +12,6 @@ use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketFilterTranslator;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketRunner;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketSchemaReader;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketSourceCompiler;
-use MediaWiki\Extension\AGGrid\DataSource\DataSourceRegistry;
 use MediaWiki\Extension\AGGrid\DataSource\Smw\FilterTranslator;
 use MediaWiki\Extension\AGGrid\DataSource\Smw\SmwBackend;
 use MediaWiki\Extension\AGGrid\DataSource\Smw\SmwDataSource;
@@ -36,20 +34,6 @@ return [
 	},
 	'AGGrid.SourceSpecStore' => static function ( MediaWikiServices $services ): SourceSpecStore {
 		return new SourceSpecStore( $services->getConnectionProvider() );
-	},
-	'AGGrid.DataSourceRegistry' => static function ( MediaWikiServices $services ): DataSourceRegistry {
-		$factories = [];
-		if ( ExtensionRegistry::getInstance()->isLoaded( 'SemanticMediaWiki' ) ) {
-			$factories['smw'] = static function () use ( $services ): BackendDataSource {
-				return $services->getService( 'AGGrid.SmwDataSource' );
-			};
-		}
-		if ( ExtensionRegistry::getInstance()->isLoaded( 'Bucket' ) ) {
-			$factories['bucket'] = static function () use ( $services ): BackendDataSource {
-				return $services->getService( 'AGGrid.BucketDataSource' );
-			};
-		}
-		return new DataSourceRegistry( $factories );
 	},
 	'AGGrid.BackendRegistry' => static function ( MediaWikiServices $services ): BackendRegistry {
 		return new BackendRegistry(
