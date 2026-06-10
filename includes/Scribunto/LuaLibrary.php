@@ -179,6 +179,11 @@ class LuaLibrary extends LibraryBase {
 		$viewConfig = $gridOptions;
 		unset( $viewConfig['source'], $viewConfig['columnDefs'], $viewConfig['rowData'] );
 		$viewConfig['columnDefs'] = $columnDefs;
+		if ( $type === 'bucket' ) {
+			// Bucket has no server-side substring search, so the quick-search box would
+			// be inert — drop it rather than render a dead control.
+			unset( $viewConfig['quickSearch'] );
+		}
 
 		$parser = $this->getParser();
 		$parserOutput = $parser->getOutput();

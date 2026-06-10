@@ -140,6 +140,24 @@ class LuaLibraryBucketSourceTest extends MediaWikiIntegrationTestCase {
 		$this->assertSame( 'skill__category', $columnDefs[1]['field'], 'dotted field becomes a dot-free colId' );
 	}
 
+	public function testQuickSearchStrippedFromBucketGrids(): void {
+		$parser = $this->newStartedParser();
+		$result = $this->newLibrary( $parser )->render( [
+			'quickSearch' => true,
+			'source' => [
+				'type' => 'bucket',
+				'bucket' => 'item',
+				'fields' => [ 'value' ],
+			],
+		] );
+		$viewConfig = $this->viewConfigFromPlaceholder( $parser, $result[0] );
+		$this->assertArrayNotHasKey(
+			'quickSearch',
+			$viewConfig,
+			'quick search is dropped on bucket grids (no server-side substring search)'
+		);
+	}
+
 	public function testUnknownSourceTypeThrows(): void {
 		$this->expectException( LuaError::class );
 		$this->newLibrary( $this->newStartedParser() )->render( [
