@@ -6,6 +6,7 @@ namespace MediaWiki\Extension\AGGrid\Tests\Integration;
 
 use MediaWiki\Extension\AGGrid\Rest\GridRowsHandler;
 use MediaWiki\Extension\AGGrid\Service\InlineDataStore;
+use MediaWiki\Registration\ExtensionRegistry;
 use MediaWiki\Rest\RequestData;
 use MediaWiki\Tests\Rest\Handler\HandlerTestTrait;
 use MediaWiki\Tests\Unit\Permissions\MockAuthorityTrait;
@@ -19,6 +20,17 @@ use Wikimedia\Rdbms\IMaintainableDatabase;
 class GridRowsHandlerTest extends MediaWikiIntegrationTestCase {
 	use HandlerTestTrait;
 	use MockAuthorityTrait;
+
+	protected function setUp(): void {
+		parent::setUp();
+		if ( ExtensionRegistry::getInstance()->isLoaded( 'Bucket' ) ) {
+			// When Bucket is also installed (a combined dev environment), saving the fixture
+			// page otherwise fires Bucket's writePuts against bucket_pages through its
+			// restricted DB user, which cannot reach the cloned, prefixed test tables. The
+			// inline /rows path under test doesn't depend on that post-save flush.
+			$this->clearHook( 'LinksUpdateComplete' );
+		}
+	}
 
 	/**
 	 * @inheritDoc
