@@ -3,6 +3,7 @@
 declare( strict_types=1 );
 
 use MediaWiki\Extension\AGGrid\DataSource\BackendDataSource;
+use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketBackend;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketColumnMapper;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketDataSource;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketFilterTranslator;
@@ -11,6 +12,7 @@ use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketSchemaReader;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketSourceCompiler;
 use MediaWiki\Extension\AGGrid\DataSource\DataSourceRegistry;
 use MediaWiki\Extension\AGGrid\DataSource\Smw\FilterTranslator;
+use MediaWiki\Extension\AGGrid\DataSource\Smw\SmwBackend;
 use MediaWiki\Extension\AGGrid\DataSource\Smw\SmwDataSource;
 use MediaWiki\Extension\AGGrid\DataSource\Smw\SmwSourceCompiler;
 use MediaWiki\Extension\AGGrid\DataSource\Smw\TypeColumnMapper;
@@ -64,6 +66,12 @@ return [
 	'AGGrid.SmwSourceCompiler' => static function ( MediaWikiServices $services ): SmwSourceCompiler {
 		return new SmwSourceCompiler();
 	},
+	'AGGrid.SmwBackend' => static function ( MediaWikiServices $services ): SmwBackend {
+		return new SmwBackend(
+			$services->getService( 'AGGrid.SmwSourceCompiler' ),
+			$services->getService( 'AGGrid.SmwDataSource' )
+		);
+	},
 	'AGGrid.BucketMaxValues' => static function ( MediaWikiServices $services ): int {
 		return (int)$services->getMainConfig()->get( 'AGGridBucketMaxValues' );
 	},
@@ -86,6 +94,12 @@ return [
 			new BucketColumnMapper(),
 			$services->getService( 'AGGrid.BackendCacheMaxAge' ),
 			$services->getService( 'AGGrid.BucketMaxValues' )
+		);
+	},
+	'AGGrid.BucketBackend' => static function ( MediaWikiServices $services ): BucketBackend {
+		return new BucketBackend(
+			$services->getService( 'AGGrid.BucketSourceCompiler' ),
+			$services->getService( 'AGGrid.BucketDataSource' )
 		);
 	},
 ];
