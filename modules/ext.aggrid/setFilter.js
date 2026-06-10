@@ -3,7 +3,7 @@
 // AG Grid Community ships no Set Filter; this is a vanilla IFilterComp registered by name
 // (aggridSet) and referenced from a colDef as `filter: 'aggridSet'`. By default values are
 // derived from the loaded rows via each column's display scalar — the same valueFormatter
-// output that sort and quick-search use — so a rich link/image column filters on its text,
+// output that sort and CSV export use — so a rich link/image column filters on its text,
 // not the raw object. A colDef may override this with a function `filterValueGetter`
 // (client-side grids; a backend SMW column declares `filterProp` on its printout in Lua
 // instead — the server lists and filters on that property) to filter on a different facet

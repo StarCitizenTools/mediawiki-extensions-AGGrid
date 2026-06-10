@@ -228,6 +228,110 @@ describe( 'mountGrid', () => {
 		expect( opts.components.keep ).toEqual( { y: 2 } );
 	} );
 
+	// createGrid leaves a root wrapper inside the container, like the real bundle;
+	// quickSearch.setup() inserts the toolbar into it.
+	function stubCreateGridWithRootWrapper() {
+		global.agGrid.createGrid = vi.fn( ( container ) => {
+			const root = document.createElement( 'div' );
+			root.className = 'ag-root-wrapper';
+			container.appendChild( root );
+			return { setGridOption: vi.fn() };
+		} );
+	}
+
+	it( 'consumes quickSearch and builds the toolbar before gridReady fires', () => {
+		stubCreateGridWithRootWrapper();
+		let toolbarAtFire = null;
+		global.mw.hook = vi.fn( ( name ) => ( {
+			fire: vi.fn( ( api, gridEl ) => {
+				if ( name === 'ext.aggrid.gridReady' ) {
+					toolbarAtFire = gridEl.querySelector( '.ext-aggrid-toolbar' );
+				}
+			} )
+		} ) );
+
+		const el = makeEl( '{"columnDefs":[],"rowData":[],"quickSearch":true}' );
+		mountGrid( el );
+
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		// Consumed before createGrid — AG Grid warns about unknown gridOptions keys.
+		expect( 'quickSearch' in opts ).toBe( false );
+		// Built before the announce, so gridReady handlers see the final chrome.
+		expect( toolbarAtFire ).not.toBeNull();
+		expect( el.querySelector( '.ext-aggrid-toolbar input' ) ).not.toBeNull();
+
+		delete global.mw.hook;
+	} );
+
+	it( 'accepts the object form and uses the author placeholder', () => {
+		stubCreateGridWithRootWrapper();
+		const el = makeEl(
+			'{"columnDefs":[],"rowData":[],"quickSearch":{"placeholder":"Find ships…","debounceMs":0}}'
+		);
+		mountGrid( el );
+		const input = el.querySelector( '.ext-aggrid-toolbar__input' );
+		expect( input.placeholder ).toBe( 'Find ships…' );
+	} );
+
+	it( 'builds no toolbar when quickSearch is absent or false', () => {
+		stubCreateGridWithRootWrapper();
+		const plain = makeEl( '{"columnDefs":[],"rowData":[]}' );
+		mountGrid( plain );
+		expect( plain.querySelector( '.ext-aggrid-toolbar' ) ).toBeNull();
+
+		const off = makeEl( '{"columnDefs":[],"rowData":[],"quickSearch":false}' );
+		mountGrid( off );
+		expect( off.querySelector( '.ext-aggrid-toolbar' ) ).toBeNull();
+	} );
+
+	it( 'consumes quickSearch but builds no toolbar on the backend path', () => {
+		stubCreateGridWithRootWrapper();
+		mockRest( vi.fn().mockResolvedValue( { rows: [], total: 0 } ) );
+
+		const el = makeBackendEl( '{"columnDefs":[{"field":"n"}],"quickSearch":true}' );
+		mountGrid( el );
+
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		expect( 'quickSearch' in opts ).toBe( false );
+		expect( el.querySelector( '.ext-aggrid-toolbar' ) ).toBeNull();
+
+		delete global.mw.Rest;
+	} );
+
+	it( 'builds no toolbar on the error mount path', () => {
+		stubCreateGridWithRootWrapper();
+		// No rowData and no fetch handle → error mount.
+		const el = makeEl( '{"columnDefs":[{"field":"name"}],"quickSearch":true}' );
+		mountGrid( el );
+
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		expect( 'quickSearch' in opts ).toBe( false );
+		expect( el.querySelector( '.ext-aggrid-toolbar' ) ).toBeNull();
+	} );
+
+	it( 'builds the toolbar on the REST-fetch inline path once rows arrive', async () => {
+		stubCreateGridWithRootWrapper();
+		const get = vi.fn().mockResolvedValue( { rows: [ { name: 'Aurora' } ] } );
+		const RestMock = vi.fn();
+		RestMock.prototype.get = get;
+		global.mw.Rest = RestMock;
+
+		const el = makeHandleEl( '{"columnDefs":[{"field":"name"}],"quickSearch":true}' );
+		mountGrid( el );
+		// Toolbar appears only after the fetch resolves and finishMount runs.
+		expect( el.querySelector( '.ext-aggrid-toolbar' ) ).toBeNull();
+
+		await new Promise( ( r ) => {
+			setTimeout( r, 0 );
+		} );
+
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		expect( 'quickSearch' in opts ).toBe( false );
+		expect( el.querySelector( '.ext-aggrid-toolbar input' ) ).not.toBeNull();
+
+		delete global.mw.Rest;
+	} );
+
 	function makeBackendEl( opts ) {
 		const el = makeHandleEl( opts );
 		el.setAttribute( 'data-mw-aggrid-source', 'smw' );
