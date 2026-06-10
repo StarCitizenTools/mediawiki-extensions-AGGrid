@@ -13,5 +13,7 @@
 	"aggrid-setfilter-blanks": "(Blanks)",
 	"aggrid-setfilter-loading": "Loading…",
 	"aggrid-setfilter-partial": "Showing partial values",
-	"aggrid-setfilter-values-error": "Could not load filter values."
+	"aggrid-setfilter-values-error": "Could not load filter values.",
+	"aggrid-quicksearch-placeholder": "Search…",
+	"aggrid-quicksearch-label": "Search the table"
 }

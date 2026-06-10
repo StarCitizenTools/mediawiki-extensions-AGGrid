@@ -78,6 +78,63 @@
 	opacity: 0.7;
 }
 
+// Quick-search toolbar (issue #21). The widget mirrors AG Grid Enterprise's Quick
+// Access Toolbar DOM (ag-toolbar / ag-toolbar-item / ag-toolbar-input /
+// ag-toolbar-input-icon / ag-toolbar-input-field) and is inserted inside the grid's
+// themed root. The Community bundle paints the magnifier (the .ag-icon-search mask
+// ships with the icon CSS) and defines the --ag-* variables, but the structural
+// .ag-toolbar* rules are emitted only alongside the Enterprise toolbar component,
+// so the layout lives here — built from the same --ag-* variables (light-dark()
+// values), which keeps the box matching the grid theme and following dark mode.
+.ext-aggrid-toolbar {
+	display: flex;
+	flex: none;
+	align-items: center;
+	min-height: var( --ag-header-height, 42px );
+	padding-inline: var( --ag-spacing, 8px );
+	color: var( --ag-toolbar-text-color, inherit );
+	background-color: var( --ag-toolbar-background-color, transparent );
+	border-bottom: var( --ag-row-border, 1px solid #dadde3 );
+
+	// The wrapper is the visible field (the real toolbar does the same): the icon
+	// sits inside the border, and focus is indicated here via :focus-within.
+	.ext-aggrid-toolbar__search {
+		display: flex;
+		column-gap: var( --ag-spacing, 8px );
+		align-items: center;
+		height: var( --ag-input-height, 30px );
+		padding-inline-start: var( --ag-input-padding-start, 8px );
+		background-color: var( --ag-input-background-color, transparent );
+		border: var( --ag-input-border, 1px solid #dadde3 );
+		border-radius: var( --ag-input-border-radius, 4px );
+
+		&:focus-within {
+			border: var( --ag-input-focus-border, 1px solid #36c );
+			box-shadow: var( --ag-input-focus-shadow, none );
+		}
+	}
+
+	.ext-aggrid-toolbar__icon {
+		display: flex;
+		// Pair the icon with the field it sits in, not the toolbar surface — an
+		// author theme with contrasting header colors would otherwise hide it.
+		color: var( --ag-input-text-color, inherit );
+		pointer-events: none;
+	}
+
+	.ext-aggrid-toolbar__input {
+		min-width: 200px;
+		height: 100%;
+		padding-inline: 0 var( --ag-input-padding-start, 8px );
+		font: inherit;
+		color: var( --ag-input-text-color, inherit );
+		// Focus is rendered on the field wrapper via :focus-within above.
+		outline: 0;
+		background: transparent;
+		border: 0;
+	}
+}
+
 @media ( prefers-reduced-motion: no-preference ) {
 	// Sweep a gradient band across with a compositor-driven transform (GPU) rather
 	// than animating background-position, which repaints every frame and stutters.

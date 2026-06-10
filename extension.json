@@ -108,7 +108,8 @@
 				"ext.aggrid/renderers.js",
 				"ext.aggrid/registry.js",
 				"ext.aggrid/format.js",
-				"ext.aggrid/setFilter.js"
+				"ext.aggrid/setFilter.js",
+				"ext.aggrid/quickSearch.js"
 			],
 			"dependencies": [
 				"mediawiki.api"
@@ -120,7 +121,9 @@
 				"aggrid-setfilter-blanks",
 				"aggrid-setfilter-loading",
 				"aggrid-setfilter-partial",
-				"aggrid-setfilter-values-error"
+				"aggrid-setfilter-values-error",
+				"aggrid-quicksearch-placeholder",
+				"aggrid-quicksearch-label"
 			]
 		}
 	},

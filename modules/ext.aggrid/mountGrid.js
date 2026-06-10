@@ -3,6 +3,7 @@
 const { getWikiTheme } = require( './theme.js' );
 const { buildRegistry } = require( './registry.js' );
 const { makeFormatter } = require( './format.js' );
+const quickSearch = require( './quickSearch.js' );
 
 const PLACEHOLDER_SELECTOR = '.ext-aggrid';
 const CONFIG_ATTR = 'data-mw-aggrid-options';
@@ -100,11 +101,13 @@ function applyFormatters( colDefs ) {
 
 /**
  * Apply the built-in theme, extension registry (column types + components) to
- * gridOptions, and drop the loading skeleton/busy state from the container. Shared by
- * the inline and backend mount paths so both wire the built-ins identically.
+ * gridOptions, consume the extension's own quickSearch option, and drop the loading
+ * skeleton/busy state from the container. Shared by the inline and backend mount
+ * paths so both wire the built-ins identically.
  *
  * @param {HTMLElement} el The .ext-aggrid container.
  * @param {Object} gridOptions gridOptions to prepare in place.
+ * @return {Object|null} Normalized quickSearch config, or null when disabled.
  */
 function prepareGridOptions( el, gridOptions ) {
 	// Apply the wiki theme unless the author already chose one.
@@ -120,27 +123,41 @@ function prepareGridOptions( el, gridOptions ) {
 	const registry = buildRegistry();
 	gridOptions.columnTypes = Object.assign( {}, gridOptions.columnTypes, registry.columnTypes );
 	gridOptions.components = Object.assign( {}, gridOptions.components, registry.components );
+	// Consume our own quickSearch option before createGrid — like colDef.format above,
+	// it is extension config, not an AG Grid property, and AG Grid warns about unknown
+	// gridOptions keys. Whether the config is then wired is the caller's decision:
+	// backend mounts never wire it (AG Grid's quick filter is client-side-model-only).
+	const quickSearchConfig = quickSearch.normalize( gridOptions.quickSearch );
+	delete gridOptions.quickSearch;
 	// AG Grid expects an empty container.
 	const skeleton = el.querySelector( '.ext-aggrid__skeleton' );
 	if ( skeleton ) {
 		skeleton.remove();
 	}
 	el.removeAttribute( 'aria-busy' );
+	return quickSearchConfig;
 }
 
 /**
- * Create the grid and announce it so gadgets/skins can grab the api after mount
- * (wire a search box, external filters, toolbar controls, programmatic control).
- * Single fire site for every mount path (inline, backend, error). Guarded so the
- * vitest harness — which has no mw.hook — is unaffected, matching registry.js.
+ * Create the grid, build the optional quick-search toolbar, and announce the grid so
+ * gadgets/skins can grab the api after mount (wire external filters, toolbar controls,
+ * programmatic control). Single fire site for every mount path (inline, backend,
+ * error). The toolbar is built before the announce so gridReady handlers observe the
+ * final grid chrome (a gadget can detect .ext-aggrid-toolbar and skip its own search
+ * box). Guarded so the vitest harness — which has no mw.hook — is unaffected, matching
+ * registry.js.
  *
  * @param {HTMLElement} el The .ext-aggrid container.
  * @param {Object} gridOptions Fully-prepared gridOptions.
+ * @param {Object|null} [quickSearchConfig] Normalized quickSearch config to wire.
  * @return {Object} The AG Grid GridApi.
  */
-function createAndAnnounce( el, gridOptions ) {
+function createAndAnnounce( el, gridOptions, quickSearchConfig ) {
 	// agGrid is the global exposed by the vendored AG Grid bundle.
 	const api = agGrid.createGrid( el, gridOptions );
+	if ( quickSearchConfig ) {
+		quickSearch.setup( el, api, quickSearchConfig );
+	}
 	if ( typeof mw !== 'undefined' && mw.hook ) {
 		mw.hook( 'ext.aggrid.gridReady' ).fire( api, el, gridOptions );
 	}
@@ -154,8 +171,8 @@ function createAndAnnounce( el, gridOptions ) {
  * @param {Object} gridOptions Fully-populated gridOptions (rowData present).
  */
 function finishMount( el, gridOptions ) {
-	prepareGridOptions( el, gridOptions );
-	createAndAnnounce( el, gridOptions );
+	const quickSearchConfig = prepareGridOptions( el, gridOptions );
+	createAndAnnounce( el, gridOptions, quickSearchConfig );
 }
 
 /**
@@ -169,6 +186,9 @@ function finishMount( el, gridOptions ) {
  */
 function mountError( el, gridOptions ) {
 	gridOptions.rowData = [];
+	// No quick-search toolbar on an error mount: a search box over a grid that
+	// could not load its rows is a dead control.
+	delete gridOptions.quickSearch;
 	// AG Grid has no dedicated error overlay; show the message via the no-rows
 	// overlay, which is auto-shown for an empty client-side row model. The
 	// interface message is escaped before being injected into the overlay HTML.
@@ -275,6 +295,9 @@ function mountBackend( el, gridOptions ) {
 		}
 	};
 
+	// prepareGridOptions consumes quickSearch, but the config is deliberately not
+	// wired here: AG Grid's quick filter only supports the client-side row model,
+	// so backend grids get no search box (#21; server-side routing is a follow-up).
 	prepareGridOptions( el, gridOptions );
 	// Configure the Infinite Row Model over the offset datasource. The server's
 	// total count drives the page bar; offset paging is stateless so AG Grid can
