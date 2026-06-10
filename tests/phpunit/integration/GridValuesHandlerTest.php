@@ -5,9 +5,10 @@ declare( strict_types=1 );
 namespace MediaWiki\Extension\AGGrid\Tests\Integration;
 
 use InvalidArgumentException;
+use MediaWiki\Extension\AGGrid\DataSource\Backend;
 use MediaWiki\Extension\AGGrid\DataSource\BackendDataSource;
+use MediaWiki\Extension\AGGrid\DataSource\BackendRegistry;
 use MediaWiki\Extension\AGGrid\DataSource\CachePolicy;
-use MediaWiki\Extension\AGGrid\DataSource\DataSourceRegistry;
 use MediaWiki\Extension\AGGrid\Rest\GridValuesHandler;
 use MediaWiki\Extension\AGGrid\Service\SourceSpecStore;
 use MediaWiki\Permissions\PermissionManager;
@@ -54,13 +55,15 @@ class GridValuesHandlerTest extends MediaWikiIntegrationTestCase {
 		$specStore = $this->createMock( SourceSpecStore::class );
 		$specStore->method( 'getSource' )->willReturn( $source );
 
-		$registry = $this->createMock( DataSourceRegistry::class );
+		$registry = $this->createMock( BackendRegistry::class );
 		if ( $dataSource === null ) {
 			$registry->method( 'get' )->willThrowException(
-				new InvalidArgumentException( 'No data source registered for key: bogus' )
+				new InvalidArgumentException( 'No backend registered for type: bogus' )
 			);
 		} else {
-			$registry->method( 'get' )->willReturn( $dataSource );
+			$backend = $this->createMock( Backend::class );
+			$backend->method( 'getDataSource' )->willReturn( $dataSource );
+			$registry->method( 'get' )->willReturn( $backend );
 		}
 
 		$permissionManager = $this->createMock( PermissionManager::class );

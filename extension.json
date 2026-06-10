@@ -73,7 +73,7 @@
 			"method": "GET",
 			"class": "MediaWiki\\Extension\\AGGrid\\Rest\\GridPageHandler",
 			"services": [
-				"AGGrid.DataSourceRegistry",
+				"AGGrid.BackendRegistry",
 				"AGGrid.SourceSpecStore",
 				"PermissionManager",
 				"TitleFactory",
@@ -85,7 +85,7 @@
 			"method": "GET",
 			"class": "MediaWiki\\Extension\\AGGrid\\Rest\\GridValuesHandler",
 			"services": [
-				"AGGrid.DataSourceRegistry",
+				"AGGrid.BackendRegistry",
 				"AGGrid.SourceSpecStore",
 				"PermissionManager",
 				"TitleFactory",

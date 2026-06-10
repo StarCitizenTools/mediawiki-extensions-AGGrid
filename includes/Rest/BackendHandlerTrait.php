@@ -6,8 +6,8 @@ namespace MediaWiki\Extension\AGGrid\Rest;
 
 use InvalidArgumentException;
 use MediaWiki\Extension\AGGrid\DataSource\BackendDataSource;
+use MediaWiki\Extension\AGGrid\DataSource\BackendRegistry;
 use MediaWiki\Extension\AGGrid\DataSource\CachePolicy;
-use MediaWiki\Extension\AGGrid\DataSource\DataSourceRegistry;
 use MediaWiki\Extension\AGGrid\Service\SourceSpecStore;
 use MediaWiki\Permissions\PermissionManager;
 use MediaWiki\Rest\LocalizedHttpException;
@@ -32,7 +32,7 @@ use Wikimedia\Message\MessageValue;
  * They must also implement getAuthority() and getResponseFactory()
  * (provided by {@see SimpleHandler}).
  *
- * @property DataSourceRegistry $registry
+ * @property BackendRegistry $registry
  * @property SourceSpecStore $specStore
  * @property PermissionManager $permissionManager
  * @property TitleFactory $titleFactory
@@ -83,12 +83,12 @@ trait BackendHandlerTrait {
 	}
 
 	/**
-	 * Resolve the BackendDataSource for the given spec, throwing 404 on unknown type.
+	 * Resolve the BackendDataSource for the given spec, throwing 404 on unknown/unavailable type.
 	 */
 	private function resolveDataSource( array $source, Title $title ): BackendDataSource {
-		/** @var DataSourceRegistry $registry */
+		/** @var BackendRegistry $registry */
 		try {
-			return $this->registry->get( $source['source'] );
+			return $this->registry->get( $source['source'] )->getDataSource();
 		} catch ( InvalidArgumentException ) {
 			throw new LocalizedHttpException(
 				new MessageValue( 'rest-nonexistent-title', [ $title->getPrefixedText() ] ),

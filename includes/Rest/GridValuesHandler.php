@@ -4,7 +4,7 @@ declare( strict_types=1 );
 
 namespace MediaWiki\Extension\AGGrid\Rest;
 
-use MediaWiki\Extension\AGGrid\DataSource\DataSourceRegistry;
+use MediaWiki\Extension\AGGrid\DataSource\BackendRegistry;
 use MediaWiki\Extension\AGGrid\Service\SourceSpecStore;
 use MediaWiki\Permissions\PermissionManager;
 use MediaWiki\Rest\LocalizedHttpException;
@@ -31,7 +31,7 @@ class GridValuesHandler extends SimpleHandler {
 	use BackendHandlerTrait;
 
 	public function __construct(
-		private readonly DataSourceRegistry $registry,
+		private readonly BackendRegistry $registry,
 		private readonly SourceSpecStore $specStore,
 		private readonly PermissionManager $permissionManager,
 		private readonly TitleFactory $titleFactory,

@@ -26,6 +26,13 @@ class LuaLibrarySourceTest extends MediaWikiIntegrationTestCase {
 		if ( !ExtensionRegistry::getInstance()->isLoaded( 'SemanticMediaWiki' ) ) {
 			$this->markTestSkipped( 'Semantic MediaWiki is required for the source path tests.' );
 		}
+		if ( ExtensionRegistry::getInstance()->isLoaded( 'Bucket' ) ) {
+			// When Bucket is also installed (a combined dev environment), saving the fixture
+			// page otherwise fires Bucket's writePuts against bucket_pages through its
+			// restricted DB user, which cannot reach the cloned, prefixed test tables. The
+			// SMW source path under test doesn't depend on that post-save flush.
+			$this->clearHook( 'LinksUpdateComplete' );
+		}
 	}
 
 	protected function getSchemaOverrides( IMaintainableDatabase $db ) {
@@ -182,6 +189,23 @@ class LuaLibrarySourceTest extends MediaWikiIntegrationTestCase {
 		$this->newLibrary( $this->newStartedParser() )->render( [
 			'source' => [ 'type' => 'cargo', 'query' => 'x', 'printouts' => [ 'A' ] ],
 		] );
+	}
+
+	public function testQuickSearchKeptOnSmwGrids(): void {
+		$parser = $this->newStartedParser();
+		$result = $this->newLibrary( $parser )->render( [
+			'quickSearch' => true,
+			'source' => [
+				'type' => 'smw',
+				'query' => '[[Category:City]]',
+				'printouts' => [ 'Has population' ],
+			],
+		] );
+		$viewConfig = $this->viewConfigFromPlaceholder( $parser, $result[0] );
+		$this->assertTrue(
+			$viewConfig['quickSearch'],
+			'SMW supports server-side substring search, so quick search survives'
+		);
 	}
 
 	public function testMissingSourceTypeThrows(): void {

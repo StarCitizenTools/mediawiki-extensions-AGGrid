@@ -2,16 +2,20 @@
 
 declare( strict_types=1 );
 
-use MediaWiki\Extension\AGGrid\DataSource\BackendDataSource;
+use MediaWiki\Extension\AGGrid\DataSource\Backend;
+use MediaWiki\Extension\AGGrid\DataSource\BackendDescriptor;
+use MediaWiki\Extension\AGGrid\DataSource\BackendRegistry;
+use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketBackend;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketColumnMapper;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketDataSource;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketFilterTranslator;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketRunner;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketSchemaReader;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketSourceCompiler;
-use MediaWiki\Extension\AGGrid\DataSource\DataSourceRegistry;
 use MediaWiki\Extension\AGGrid\DataSource\Smw\FilterTranslator;
+use MediaWiki\Extension\AGGrid\DataSource\Smw\SmwBackend;
 use MediaWiki\Extension\AGGrid\DataSource\Smw\SmwDataSource;
+use MediaWiki\Extension\AGGrid\DataSource\Smw\SmwSourceCompiler;
 use MediaWiki\Extension\AGGrid\DataSource\Smw\TypeColumnMapper;
 use MediaWiki\Extension\AGGrid\Service\GridDataStore;
 use MediaWiki\Extension\AGGrid\Service\GridRenderer;
@@ -31,19 +35,26 @@ return [
 	'AGGrid.SourceSpecStore' => static function ( MediaWikiServices $services ): SourceSpecStore {
 		return new SourceSpecStore( $services->getConnectionProvider() );
 	},
-	'AGGrid.DataSourceRegistry' => static function ( MediaWikiServices $services ): DataSourceRegistry {
-		$factories = [];
-		if ( ExtensionRegistry::getInstance()->isLoaded( 'SemanticMediaWiki' ) ) {
-			$factories['smw'] = static function () use ( $services ): BackendDataSource {
-				return $services->getService( 'AGGrid.SmwDataSource' );
-			};
-		}
-		if ( ExtensionRegistry::getInstance()->isLoaded( 'Bucket' ) ) {
-			$factories['bucket'] = static function () use ( $services ): BackendDataSource {
-				return $services->getService( 'AGGrid.BucketDataSource' );
-			};
-		}
-		return new DataSourceRegistry( $factories );
+	'AGGrid.BackendRegistry' => static function ( MediaWikiServices $services ): BackendRegistry {
+		return new BackendRegistry(
+			[
+				new BackendDescriptor(
+					'smw',
+					'SemanticMediaWiki',
+					static function () use ( $services ): Backend {
+						return $services->getService( 'AGGrid.SmwBackend' );
+					}
+				),
+				new BackendDescriptor(
+					'bucket',
+					'Bucket',
+					static function () use ( $services ): Backend {
+						return $services->getService( 'AGGrid.BucketBackend' );
+					}
+				),
+			],
+			static fn ( string $ext ): bool => ExtensionRegistry::getInstance()->isLoaded( $ext )
+		);
 	},
 	'AGGrid.BackendCacheMaxAge' => static function ( MediaWikiServices $services ): int {
 		return (int)$services->getMainConfig()->get( 'AGGridBackendCacheMaxAge' );
@@ -58,6 +69,15 @@ return [
 			new TypeColumnMapper(),
 			$services->getService( 'AGGrid.BackendCacheMaxAge' ),
 			(int)$GLOBALS['smwgQMaxInlineLimit']
+		);
+	},
+	'AGGrid.SmwSourceCompiler' => static function ( MediaWikiServices $services ): SmwSourceCompiler {
+		return new SmwSourceCompiler();
+	},
+	'AGGrid.SmwBackend' => static function ( MediaWikiServices $services ): SmwBackend {
+		return new SmwBackend(
+			$services->getService( 'AGGrid.SmwSourceCompiler' ),
+			$services->getService( 'AGGrid.SmwDataSource' )
 		);
 	},
 	'AGGrid.BucketMaxValues' => static function ( MediaWikiServices $services ): int {
@@ -82,6 +102,12 @@ return [
 			new BucketColumnMapper(),
 			$services->getService( 'AGGrid.BackendCacheMaxAge' ),
 			$services->getService( 'AGGrid.BucketMaxValues' )
+		);
+	},
+	'AGGrid.BucketBackend' => static function ( MediaWikiServices $services ): BucketBackend {
+		return new BucketBackend(
+			$services->getService( 'AGGrid.BucketSourceCompiler' ),
+			$services->getService( 'AGGrid.BucketDataSource' )
 		);
 	},
 ];
