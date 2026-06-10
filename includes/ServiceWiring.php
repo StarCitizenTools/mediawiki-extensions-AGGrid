@@ -12,6 +12,7 @@ use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketSourceCompiler;
 use MediaWiki\Extension\AGGrid\DataSource\DataSourceRegistry;
 use MediaWiki\Extension\AGGrid\DataSource\Smw\FilterTranslator;
 use MediaWiki\Extension\AGGrid\DataSource\Smw\SmwDataSource;
+use MediaWiki\Extension\AGGrid\DataSource\Smw\SmwSourceCompiler;
 use MediaWiki\Extension\AGGrid\DataSource\Smw\TypeColumnMapper;
 use MediaWiki\Extension\AGGrid\Service\GridDataStore;
 use MediaWiki\Extension\AGGrid\Service\GridRenderer;
@@ -59,6 +60,9 @@ return [
 			$services->getService( 'AGGrid.BackendCacheMaxAge' ),
 			(int)$GLOBALS['smwgQMaxInlineLimit']
 		);
+	},
+	'AGGrid.SmwSourceCompiler' => static function ( MediaWikiServices $services ): SmwSourceCompiler {
+		return new SmwSourceCompiler();
 	},
 	'AGGrid.BucketMaxValues' => static function ( MediaWikiServices $services ): int {
 		return (int)$services->getMainConfig()->get( 'AGGridBucketMaxValues' );
