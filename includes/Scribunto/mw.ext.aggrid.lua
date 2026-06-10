@@ -37,6 +37,15 @@ end
 ---      * mainlabel string|nil  @subject column header; '-' suppresses the subject
 ---                              column. Defaults to a 'Page' column.
 ---
+--- The extension also understands one non-AG-Grid gridOption:
+---  * quickSearch boolean|table @opt-in quick-search box above the grid rows,
+---                 wired to AG Grid's quick filter. `true` enables it with an
+---                 i18n placeholder and a 200 ms debounce; a table overrides:
+---                 { placeholder = 'Find ships…', debounceMs = 300 }
+---                 (debounceMs is capped at 5000).
+---                 Client-side grids only — ignored on `source` grids, where
+---                 the quick filter cannot run (the rows live server-side).
+---
 --- @param gridOptions table @AG Grid gridOptions; inline (columnDefs + rowData) or { source = ... }
 --- @return string @The rendered grid placeholder wikitext
 function aggrid.render( gridOptions )

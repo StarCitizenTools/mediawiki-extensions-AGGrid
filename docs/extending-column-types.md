@@ -83,8 +83,11 @@ From Lua: `{ field = 'count', filter = 'evenOnly' }`.
 
 - **Build DOM, never `innerHTML`.** Use `document.createElement` + `textContent` and typed
   properties. Cell values are author data; treating them as HTML is an XSS hole.
-- **Keep a derived scalar.** Sort, filter, quick-search, and CSV export run on
-  `valueFormatter`'s output, not your DOM. Return the cell's plain text there.
+- **Keep a derived scalar.** Sort, filter, and CSV export run on `valueFormatter`'s
+  (and `comparator`'s) output, not your DOM. Return the cell's plain text there.
+  Quick search is the exception: it runs on `getQuickFilterText`, so define that
+  alongside `valueFormatter` for object values — without it the raw value is
+  stringified.
 - **Only data crosses the JSON boundary.** Your renderer (a function) lives in JS; from Lua
   you send only the cell *value* and the column's `type` / `cellRendererParams` (plain data).
 
@@ -216,13 +219,13 @@ behaves exactly as before.
 ### Filter on a different facet: `filterValueGetter`
 
 By default the set filter derives its value list — and decides what passes — from a column's
-display scalar (its `valueFormatter` output, the same value that sort, quick-search, and CSV
-export use). Set a **function** [`filterValueGetter`](https://www.ag-grid.com/javascript-data-grid/value-getters/)
+display scalar (its `valueFormatter` output, the same value that sort and CSV export use).
+Set a **function** [`filterValueGetter`](https://www.ag-grid.com/javascript-data-grid/value-getters/)
 on the colDef (or column type) to filter on a different facet instead:
 
 ```javascript
 reg.columnTypes.ship = {
-    // Sort / search / export on the ship name…
+    // Sort / export on the ship name…
     valueFormatter: ( p ) => p.data.name,
     // …but list manufacturers in the set filter.
     filterValueGetter: ( p ) => p.data.manufacturer,
@@ -234,7 +237,10 @@ The getter receives AG Grid's
 [`ValueGetterParams`](https://www.ag-grid.com/javascript-data-grid/value-getters/) shape
 (`{ api, colDef, column, node, data, getValue }`), so a getter written against the AG Grid docs
 works unchanged. A `null`/empty return collapses into the `(Blanks)` bucket like any other
-value.
+value. Quick search follows the facet too: such a column quick-searches on what
+`getQuickFilterText` returns for the facet scalar — for the built-in rich types that means
+the column is excluded from quick search, since their extractors return `''` for non-object
+input.
 
 Two boundaries, by design:
 
@@ -288,11 +294,20 @@ As with a `cellRenderer`, build DOM and never assign user data to `innerHTML`.
 AGGrid fires `ext.aggrid.gridReady` once for every grid, right after it mounts (on the inline,
 Semantic MediaWiki, and error paths alike), handing you the live AG Grid
 [`GridApi`](https://www.ag-grid.com/javascript-data-grid/grid-api/) plus the placeholder
-element and the resolved `gridOptions`:
+element and the resolved `gridOptions`.
+
+For a global quick-search box you normally don't need the hook at all — set the
+`quickSearch` gridOption in Lua and the extension renders a built-in, localised one.
+If your gadget wires its own search UI, skip grids that already have the built-in box
+(it is in the DOM by the time the hook fires; note the `gridOptions` handed to the
+hook no longer carries `quickSearch` — it is consumed before the grid is created,
+like `colDef.format` — so detect via the DOM, not the options):
 
 ```javascript
 mw.hook( 'ext.aggrid.gridReady' ).add( ( api, el, gridOptions ) => {
-    // Add a quick-search box above this grid and wire it to AG Grid's quick filter.
+    if ( el.querySelector( '.ext-aggrid-toolbar' ) ) {
+        return; // this grid opted into the built-in quickSearch box
+    }
     const search = document.createElement( 'input' );
     search.type = 'search';
     search.placeholder = 'Filter…';
@@ -330,7 +345,7 @@ mw.hook( 'ext.aggrid.register' ).add( ( reg ) => {
             card.append( eyebrow, title );
             return card;
         },
-        valueFormatter: ( p ) => p.data.name,        // sort / search / export on the name
+        valueFormatter: ( p ) => p.data.name,        // sort / export on the name
         filter: 'aggridSet',
         filterValueGetter: ( p ) => p.data.manufacturer, // but filter on the manufacturer
         filterParams: {
@@ -360,5 +375,7 @@ mw.ext.aggrid.render{
 }
 ```
 
-The grid sorts and quick-searches on the ship name, while the set filter lists `Origin` and
-`RSI` with your brand markup — no extension code specific to your wiki.
+The grid sorts on the ship name, while the set filter lists `Origin` and `RSI` with your
+brand markup — no extension code specific to your wiki. Because of the `filterValueGetter`,
+quick search matches the manufacturer facet; add a `getQuickFilterText` returning
+`p.data.name` to the type if you want it on the name instead.

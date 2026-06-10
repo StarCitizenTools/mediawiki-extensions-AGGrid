@@ -182,9 +182,9 @@ mw.hook( 'ext.aggrid.register' ).add( ( reg ) => {
 } );
 ```
 
-Build DOM safely: use `textContent` and typed properties, never `innerHTML` on cell values. Always return a plain scalar from `valueFormatter` so sort, filter, search, and export keep working.
+Build DOM safely: use `textContent` and typed properties, never `innerHTML` on cell values. Always return a plain scalar from `valueFormatter` so sort, filter, and export keep working — and define `getQuickFilterText` alongside it for object values, since quick search reads that instead.
 
-Need a handle to the grid itself? The `ext.aggrid.gridReady` hook fires after each grid mounts with AG Grid's `GridApi`, the placeholder element, and the resolved `gridOptions` — wire up a quick-search box, external filters, or drive the grid programmatically.
+Want a global search box? Set `quickSearch = true` (or `quickSearch = { placeholder = 'Find ships…', debounceMs = 300 }`) in your gridOptions and the extension renders a themed, localised quick-search box above the rows — client-side grids only. Need a handle to the grid itself? The `ext.aggrid.gridReady` hook fires after each grid mounts with AG Grid's `GridApi`, the placeholder element, and the resolved `gridOptions` — wire external filters or drive the grid programmatically.
 
 For copy-pasteable recipes — a coloured status **badge** (renderer + CSS), a composite "entity card" column that filters on a different facet than it sorts on, set-filter icons, and the `gridReady` hook — see [`docs/extending-column-types.md`](docs/extending-column-types.md).
 
