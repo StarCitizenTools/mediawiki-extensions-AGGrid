@@ -131,6 +131,10 @@
 		"AGGridBackendCacheMaxAge": {
 			"value": 120,
 			"description": "Max-age (seconds) for backend-source grid REST responses (cursor pages and column values)."
+		},
+		"AGGridBucketMaxValues": {
+			"value": 1000,
+			"description": "Maximum number of rows scanned when listing a Bucket column's set-filter values; the list is marked partial when reached."
 		}
 	},
 	"ForeignResourcesDir": "modules/lib",

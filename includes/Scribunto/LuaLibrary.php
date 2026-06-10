@@ -150,16 +150,15 @@ class LuaLibrary extends LibraryBase {
 	}
 
 	/**
-	 * Render a backend (SMW) source grid from a `source` descriptor.
+	 * Render a backend source grid from a `source` descriptor.
 	 *
-	 * Auto-builds type-aware columnDefs from the SMW property datatypes and queues
-	 * the query SPEC (not rows) via GridRenderer::renderSource(). The columnDef
-	 * `field` for each printout equals the SMW PrintRequest label that
-	 * SmwDataSource emits, and the subject column uses the reserved `_subject` key.
+	 * Dispatches by `source.type` to a per-backend builder that produces type-aware
+	 * columnDefs and the stored query spec, then queues the spec (not rows) via
+	 * GridRenderer::renderSource(). Supported types: 'smw' and 'bucket'.
 	 *
 	 * @param array $gridOptions gridOptions table carrying a `source` descriptor.
 	 * @return array
-	 * @throws LuaError If the descriptor is invalid or SMW is unavailable.
+	 * @throws LuaError If the descriptor is invalid or the backing extension is unavailable.
 	 */
 	private function renderSource( array $gridOptions ): array {
 		$source = $gridOptions['source'];
@@ -172,15 +171,85 @@ class LuaLibrary extends LibraryBase {
 			throw new LuaError( 'mw.ext.aggrid.render: source.type must be a non-empty string' );
 		}
 		$type = trim( $type );
-		if ( $type !== 'smw' ) {
-			throw new LuaError( 'mw.ext.aggrid.render: unknown source type "' . $type . '"' );
-		}
-		if ( !ExtensionRegistry::getInstance()->isLoaded( 'SemanticMediaWiki' ) ) {
-			throw new LuaError(
-				'mw.ext.aggrid.render: source type "smw" requires the Semantic MediaWiki extension'
-			);
-		}
 
+		[ $columnDefs, $spec ] = $this->buildSource( $type, $source );
+
+		// Pass through any AG-Grid options the author set alongside `source`, then
+		// override columnDefs with the auto-built array (and drop rowData entirely).
+		$viewConfig = $gridOptions;
+		unset( $viewConfig['source'], $viewConfig['columnDefs'], $viewConfig['rowData'] );
+		$viewConfig['columnDefs'] = $columnDefs;
+
+		$parser = $this->getParser();
+		$parserOutput = $parser->getOutput();
+		$parserOutput->addModules( [ 'ext.aggrid' ] );
+		$parserOutput->addModuleStyles( [ 'ext.aggrid.styles' ] );
+		// Tag the page as using AG Grid (only reached once the source is valid).
+		$parser->addTrackingCategory( self::USAGE_TRACKING_CATEGORY );
+
+		$title = $parser->getTitle();
+		$pageId = $title->getArticleID();
+		$revId = $parser->getRevisionId() ?: $title->getLatestRevID();
+		$isPreview = $parser->getOptions()->getIsPreview();
+
+		$html = MediaWikiServices::getInstance()
+			->getService( 'AGGrid.GridRenderer' )
+			->renderSource(
+				$viewConfig,
+				$spec,
+				$parserOutput,
+				$pageId ?: null,
+				$revId ?: null,
+				$isPreview,
+				$type
+			);
+
+		return [ $parser->insertStripItem( $html ) ];
+	}
+
+	/**
+	 * Dispatch a source descriptor to its per-backend builder, returning
+	 * [ columnDefs, spec ]. Each backend requires its backing extension to be loaded.
+	 *
+	 * @param string $type Source type ('smw' | 'bucket').
+	 * @param array $source The `source` descriptor table.
+	 * @return array{0: array, 1: array} [ columnDefs, spec ]
+	 * @throws LuaError If the type is unknown or its extension is unavailable.
+	 */
+	private function buildSource( string $type, array $source ): array {
+		if ( $type === 'smw' ) {
+			if ( !ExtensionRegistry::getInstance()->isLoaded( 'SemanticMediaWiki' ) ) {
+				throw new LuaError(
+					'mw.ext.aggrid.render: source type "smw" requires the Semantic MediaWiki extension'
+				);
+			}
+			return $this->buildSmwSource( $source );
+		}
+		if ( $type === 'bucket' ) {
+			if ( !ExtensionRegistry::getInstance()->isLoaded( 'Bucket' ) ) {
+				throw new LuaError(
+					'mw.ext.aggrid.render: source type "bucket" requires the Bucket extension'
+				);
+			}
+			return MediaWikiServices::getInstance()
+				->getService( 'AGGrid.BucketSourceCompiler' )
+				->compile( $source );
+		}
+		throw new LuaError( 'mw.ext.aggrid.render: unknown source type "' . $type . '"' );
+	}
+
+	/**
+	 * Build type-aware columnDefs and the stored spec for an SMW `source` descriptor.
+	 *
+	 * Auto-builds columnDefs from the SMW property datatypes. The columnDef `field`
+	 * for each printout equals the SMW PrintRequest label that SmwDataSource emits,
+	 * and the subject column uses the reserved `_subject` key.
+	 *
+	 * @param array $source The `source` descriptor table.
+	 * @return array{0: array, 1: array} [ columnDefs, spec ]
+	 * @throws LuaError If the descriptor is invalid.
+	 */
+	private function buildSmwSource( array $source ): array {
 		$queryString = $this->buildQueryString( $source['query'] ?? null );
 		$printouts = $this->parsePrintouts( $source['printouts'] ?? null );
 
@@ -258,12 +327,6 @@ class LuaLibrary extends LibraryBase {
 			] );
 		}
 
-		// Pass through any AG-Grid options the author set alongside `source`, then
-		// override columnDefs with the auto-built array (and drop rowData entirely).
-		$viewConfig = $gridOptions;
-		unset( $viewConfig['source'], $viewConfig['columnDefs'], $viewConfig['rowData'] );
-		$viewConfig['columnDefs'] = $columnDefs;
-
 		$spec = [
 			'query' => $queryString,
 			'printouts' => $canonicalPrintouts,
@@ -276,31 +339,7 @@ class LuaLibrary extends LibraryBase {
 			$spec['facets'] = $facets;
 		}
 
-		$parser = $this->getParser();
-		$parserOutput = $parser->getOutput();
-		$parserOutput->addModules( [ 'ext.aggrid' ] );
-		$parserOutput->addModuleStyles( [ 'ext.aggrid.styles' ] );
-		// Tag the page as using AG Grid (only reached once the source is valid).
-		$parser->addTrackingCategory( self::USAGE_TRACKING_CATEGORY );
-
-		$title = $parser->getTitle();
-		$pageId = $title->getArticleID();
-		$revId = $parser->getRevisionId() ?: $title->getLatestRevID();
-		$isPreview = $parser->getOptions()->getIsPreview();
-
-		$html = MediaWikiServices::getInstance()
-			->getService( 'AGGrid.GridRenderer' )
-			->renderSource(
-				$viewConfig,
-				$spec,
-				$parserOutput,
-				$pageId ?: null,
-				$revId ?: null,
-				$isPreview,
-				'smw'
-			);
-
-		return [ $parser->insertStripItem( $html ) ];
+		return [ $columnDefs, $spec ];
 	}
 
 	/**
