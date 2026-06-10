@@ -6,9 +6,10 @@
 // lives in ext.aggrid.less (.ext-aggrid-toolbar), built from the --ag-* variables.
 // The toolbar is inserted INSIDE the grid's .ag-root-wrapper so those variables
 // (mapped from Codex tokens by theme.js, light-dark() values) are in scope — the box
-// matches the grid theme and follows dark mode. Client-side row model only: AG Grid
-// hard-validates quickFilterText against the infinite row model, so mountGrid never
-// wires this on backend grids.
+// matches the grid theme and follows dark mode. The box itself is row-model agnostic:
+// setup() takes an onApply callback, so client grids drive AG Grid's quickFilterText
+// while backend grids route the term to the server (the quick filter is
+// client-model-only; mountBackend injects the server path).
 
 const DEFAULT_DEBOUNCE_MS = 200;
 const MAX_DEBOUNCE_MS = 5000;
@@ -75,8 +76,12 @@ function normalize( raw ) {
  * @param {HTMLElement} el The .ext-aggrid container (post-createGrid).
  * @param {Object} api The AG Grid GridApi.
  * @param {Object} config Normalized config from normalize().
+ * @param {Function} [onApply] Called with the current value on each (debounced) change
+ *   and on Escape-clear. Defaults to AG Grid's client-side quick filter
+ *   (`setGridOption('quickFilterText', value)`); backend grids inject a handler that
+ *   routes the term to the server instead (the quick filter is client-model-only).
  */
-function setup( el, api, config ) {
+function setup( el, api, config, onApply ) {
 	const rootWrapper = el.querySelector( '.ag-root-wrapper' );
 	if ( !rootWrapper ) {
 		mw.log.warn( '[ext.aggrid] quickSearch: no .ag-root-wrapper to attach the toolbar to' );
@@ -101,12 +106,12 @@ function setup( el, api, config ) {
 		mw.msg( 'aggrid-quicksearch-placeholder' );
 	input.setAttribute( 'aria-label', mw.msg( 'aggrid-quicksearch-label' ) );
 
-	// No teardown: a pending timer (≤5 s) may fire one setGridOption after a grid
-	// is torn down (e.g. live-preview re-render) — harmless, and the extension
-	// never destroys grids itself, so listener plumbing isn't worth it.
-	const apply = debounce( ( value ) => {
-		api.setGridOption( 'quickFilterText', value );
-	}, config.debounceMs );
+	// No teardown: a pending timer (≤5 s) may fire one apply after a grid is torn
+	// down (e.g. live-preview re-render) — harmless, and the extension never
+	// destroys grids itself, so listener plumbing isn't worth it.
+	const applyValue = onApply ||
+		( ( value ) => api.setGridOption( 'quickFilterText', value ) );
+	const apply = debounce( applyValue, config.debounceMs );
 	input.addEventListener( 'input', () => apply( input.value ) );
 	// type=search gives a native clear control in Blink/WebKit; Escape covers the rest.
 	input.addEventListener( 'keydown', ( e ) => {

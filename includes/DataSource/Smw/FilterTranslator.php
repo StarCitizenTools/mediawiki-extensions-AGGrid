@@ -143,6 +143,152 @@ class FilterTranslator {
 	}
 
 	// -------------------------------------------------------------------------
+	// Quick search (free-text box over the whole grid)
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Build a quick-search Description for a free-text term, matching the page
+	 * subject and the given columns.
+	 *
+	 * The term is split on whitespace into words; every word must match somewhere
+	 * (AND across words), and each word may match any searched target (OR across the
+	 * subject and columns) — mirroring AG Grid's client-side quick filter.
+	 *
+	 * Each target's condition is built through SMW's own
+	 * {@see \SMW\DataValues\DataValue::getQueryDescription()}, so every datatype gets
+	 * its native query semantics: text/page columns and the subject match a substring
+	 * (~*word*), date columns expand to a precision range (~word), and number columns
+	 * match exactly. A target whose value does not parse for its type yields a
+	 * ThingDescription (match-everything), which is dropped so it cannot nullify the
+	 * word's disjunction (the value form per kind comes from {@see quickSearchValue}).
+	 *
+	 * User words are stripped of SMW query metacharacters first; combined with the
+	 * fixed wrapping per kind (and number columns matching only a strictly-numeric
+	 * word), a word is always a literal substring or an exact number and cannot inject
+	 * comparators or wildcards.
+	 *
+	 * @param string $term The raw search-box value.
+	 * @param string[] $searchFields Declared column fields to consider.
+	 * @param callable $propertyOf Callable( string $field ): string — column field to
+	 *   its real SMW property name.
+	 * @param callable $kindOf Callable( string $field ): ?string — column field to its
+	 *   quick-search kind (like-text|like-page|like-date|eq-number), or null to skip.
+	 * @param bool $includeSubject Whether to also match the page subject (page name).
+	 * @return Description|null Null when the term is empty or yields no condition.
+	 */
+	public function quickSearchDescription(
+		string $term,
+		array $searchFields,
+		callable $propertyOf,
+		callable $kindOf,
+		bool $includeSubject
+	): ?Description {
+		$words = $this->quickSearchWords( $term );
+		if ( $words === [] ) {
+			return null;
+		}
+
+		$wordDescriptions = [];
+		foreach ( $words as $word ) {
+			$parts = [];
+			if ( $includeSubject ) {
+				$subject = $this->quickSubjectDescription( $word );
+				if ( $subject !== null ) {
+					$parts[] = $subject;
+				}
+			}
+			foreach ( $searchFields as $field ) {
+				$kind = $kindOf( $field );
+				if ( $kind === null ) {
+					continue;
+				}
+				$column = $this->quickColumnDescription( $propertyOf( $field ), $kind, $word );
+				if ( $column !== null ) {
+					$parts[] = $column;
+				}
+			}
+			if ( $parts === [] ) {
+				// This word cannot be expressed as any condition — only reachable with
+				// no subject and no text/page columns (e.g. a non-numeric word over a
+				// number-only grid whose subject column is suppressed). The AND of words
+				// is then unsatisfiable; degrade to no quick-search constraint.
+				return null;
+			}
+			$wordDescriptions[] = count( $parts ) === 1 ? $parts[0] : new Disjunction( $parts );
+		}
+
+		return count( $wordDescriptions ) === 1
+			? $wordDescriptions[0]
+			: new Conjunction( $wordDescriptions );
+	}
+
+	/**
+	 * Split a term into sanitized words: whitespace-separated, with SMW query
+	 * metacharacters removed so each word is a literal substring. Empty words drop out.
+	 *
+	 * @return string[]
+	 */
+	private function quickSearchWords( string $term ): array {
+		$words = [];
+		foreach ( preg_split( '/\s+/', trim( $term ) ) as $raw ) {
+			$word = str_replace( [ '*', '~', '!', '<', '>', '|', '?' ], '', $raw );
+			if ( $word !== '' ) {
+				$words[] = $word;
+			}
+		}
+		return $words;
+	}
+
+	/**
+	 * The query value form for a search kind: a substring (~*word*) for text/page, the
+	 * ~ precision comparator for dates, and the bare word (exact =) for numbers.
+	 *
+	 * @return string|null Null for an unknown kind.
+	 */
+	private function quickSearchValue( string $kind, string $word ): ?string {
+		return match ( $kind ) {
+			'like-text', 'like-page' => '~*' . $word . '*',
+			'like-date' => '~' . $word,
+			// Only a strictly-numeric word reaches the number builder. The word is at
+			// position 0 of the value (unlike the wrapped/prefixed forms above), so a
+			// surviving comparator that quickSearchWords does not strip — the ≥/≤ glyphs
+			// or an "in:"/"not:"/"phrase:" prefix — would otherwise be parsed as a
+			// comparator or range instead of an exact match. Non-numeric words drop.
+			'eq-number' => is_numeric( $word ) ? $word : null,
+			default => null,
+		};
+	}
+
+	/**
+	 * Build one column's quick-search condition for a single word, wrapped in a
+	 * SomeProperty. Null when the kind is unsearchable or the value does not parse for
+	 * the column's datatype (a dropped ThingDescription).
+	 */
+	private function quickColumnDescription( string $propertyName, string $kind, string $word ): ?Description {
+		$value = $this->quickSearchValue( $kind, $word );
+		if ( $value === null ) {
+			return null;
+		}
+		$property = DIProperty::newFromUserLabel( $propertyName );
+		$dataValue = DataValueFactory::getInstance()->newDataValueByProperty( $property );
+		$valueDesc = $dataValue->getQueryDescription( $value );
+		if ( $valueDesc instanceof ThingDescription ) {
+			return null;
+		}
+		return new SomeProperty( $property, $valueDesc );
+	}
+
+	/**
+	 * Build the subject (page name) match for one word: a top-level [[~*word*]]
+	 * substring condition. Null when SMW cannot build it.
+	 */
+	private function quickSubjectDescription( string $word ): ?Description {
+		$dataValue = DataValueFactory::getInstance()->newDataValueByType( '_wpg' );
+		$valueDesc = $dataValue->getQueryDescription( '~*' . $word . '*' );
+		return $valueDesc instanceof ThingDescription ? null : $valueDesc;
+	}
+
+	// -------------------------------------------------------------------------
 	// Per-column dispatcher
 	// -------------------------------------------------------------------------
 

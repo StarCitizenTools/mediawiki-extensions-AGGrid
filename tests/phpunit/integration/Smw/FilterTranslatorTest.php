@@ -488,4 +488,181 @@ class FilterTranslatorTest extends MediaWikiIntegrationTestCase {
 		$this->assertStringContainsString( 'lond', $qs );
 		$this->assertStringContainsString( '1000000', $qs );
 	}
+
+	// -------------------------------------------------------------------------
+	// quickSearchDescription()
+	//
+	// Type-dependent behaviour (date range, dropping a value that does not parse)
+	// is exercised through SMW's predefined 'Modification date' property, which is
+	// always registered as a date type — so getQueryDescription dispatches to the
+	// real TimeValueDescriptionBuilder without seeding any wiki data. Type-neutral
+	// behaviour (word splitting, OR/AND structure, value forms, sanitization) uses
+	// plain labels and asserts on the serialized query string.
+	// -------------------------------------------------------------------------
+
+	/** A property registered (predefined) as a date type. */
+	private const DATE_PROP = 'Modification date';
+
+	/** Identity field -> property resolver. */
+	private static function identity(): callable {
+		return static fn ( string $field ): string => $field;
+	}
+
+	/** Constant kind resolver. */
+	private static function kind( ?string $kind ): callable {
+		return static fn ( string $field ): ?string => $kind;
+	}
+
+	/** Per-field kind resolver. */
+	private static function kinds( array $map ): callable {
+		return static fn ( string $field ): ?string => $map[$field] ?? null;
+	}
+
+	public function testQuickSearchSingleWordTextColumn(): void {
+		$desc = $this->translator->quickSearchDescription(
+			'lond', [ 'City' ], self::identity(), self::kind( 'like-text' ), false
+		);
+		$this->assertNotNull( $desc );
+		$qs = $desc->getQueryString();
+		$this->assertStringContainsString( 'City', $qs );
+		$this->assertStringContainsString( '~', $qs );
+		$this->assertStringContainsString( '*lond*', $qs );
+	}
+
+	public function testQuickSearchIncludesSubject(): void {
+		// No declared columns: only the subject (page name) is matched, as a
+		// top-level [[~*lond*]] condition.
+		$desc = $this->translator->quickSearchDescription(
+			'lond', [], self::identity(), self::kind( null ), true
+		);
+		$this->assertNotNull( $desc );
+		$this->assertStringContainsString( '~*lond*', $desc->getQueryString() );
+	}
+
+	public function testQuickSearchSubjectAndColumnCombineAsDisjunction(): void {
+		// One word, two targets (subject + column) → OR.
+		$desc = $this->translator->quickSearchDescription(
+			'lond', [ 'City' ], self::identity(), self::kind( 'like-text' ), true
+		);
+		$this->assertNotNull( $desc );
+		$this->assertInstanceOf( Disjunction::class, $desc );
+		$qs = $desc->getQueryString();
+		$this->assertStringContainsString( 'City', $qs );
+		$this->assertStringContainsString( '~*lond*', $qs );
+	}
+
+	public function testQuickSearchMultiWordProducesConjunction(): void {
+		// Each word must match somewhere → AND across words.
+		$desc = $this->translator->quickSearchDescription(
+			'red sedan', [ 'City' ], self::identity(), self::kind( 'like-text' ), false
+		);
+		$this->assertNotNull( $desc );
+		$this->assertInstanceOf( Conjunction::class, $desc );
+		$qs = $desc->getQueryString();
+		$this->assertStringContainsString( '*red*', $qs );
+		$this->assertStringContainsString( '*sedan*', $qs );
+	}
+
+	public function testQuickSearchMultipleColumnsProduceDisjunctionPerWord(): void {
+		// One word, two columns → OR across columns.
+		$desc = $this->translator->quickSearchDescription(
+			'x', [ 'City', 'Country' ], self::identity(), self::kind( 'like-text' ), false
+		);
+		$this->assertNotNull( $desc );
+		$this->assertInstanceOf( Disjunction::class, $desc );
+		$qs = $desc->getQueryString();
+		$this->assertStringContainsString( 'City', $qs );
+		$this->assertStringContainsString( 'Country', $qs );
+	}
+
+	public function testQuickSearchNumberColumnExactValueForm(): void {
+		// eq-number emits the bare value: exact match, no LIKE comparator, no wildcard.
+		$desc = $this->translator->quickSearchDescription(
+			'42', [ 'Population' ], self::identity(), self::kind( 'eq-number' ), false
+		);
+		$this->assertNotNull( $desc );
+		$qs = $desc->getQueryString();
+		$this->assertStringContainsString( '42', $qs );
+		$this->assertStringNotContainsString( '~', $qs );
+		$this->assertStringNotContainsString( '*', $qs );
+	}
+
+	public function testQuickSearchNumberColumnIgnoresNonNumericWord(): void {
+		// A number column only matches a strictly-numeric word. A non-numeric token
+		// (here a bare word; in practice also comparator forms like "in:99" or "≥100"
+		// that survive metacharacter stripping) must not be fed to the number builder,
+		// where it would parse as a comparator/range. With no other target, the search
+		// yields nothing.
+		$desc = $this->translator->quickSearchDescription(
+			'inch', [ 'Length' ], self::identity(), self::kind( 'eq-number' ), false
+		);
+		$this->assertNull( $desc );
+	}
+
+	public function testQuickSearchDateColumnPrecisionRange(): void {
+		// A real date column: '2020' with the ~ comparator expands to a precision
+		// range (all of 2020), so the serialized query carries a ≥ bound.
+		$desc = $this->translator->quickSearchDescription(
+			'2020', [ self::DATE_PROP ], self::identity(), self::kind( 'like-date' ), false
+		);
+		$this->assertNotNull( $desc );
+		$qs = $desc->getQueryString();
+		$this->assertStringContainsString( '2020', $qs );
+		$this->assertStringContainsString( '≥', $qs );
+	}
+
+	public function testQuickSearchDropsValueThatDoesNotParseForItsType(): void {
+		// 'red' is not a date, so the date column's condition is a match-everything
+		// ThingDescription and is dropped; only the text column survives the word.
+		$desc = $this->translator->quickSearchDescription(
+			'red',
+			[ 'City', self::DATE_PROP ],
+			self::identity(),
+			self::kinds( [ 'City' => 'like-text', self::DATE_PROP => 'like-date' ] ),
+			false
+		);
+		$this->assertNotNull( $desc );
+		$qs = $desc->getQueryString();
+		$this->assertStringContainsString( 'City', $qs );
+		$this->assertStringContainsString( '*red*', $qs );
+		$this->assertStringNotContainsString( self::DATE_PROP, $qs );
+	}
+
+	public function testQuickSearchEmptyTermReturnsNull(): void {
+		$desc = $this->translator->quickSearchDescription(
+			'   ', [ 'City' ], self::identity(), self::kind( 'like-text' ), true
+		);
+		$this->assertNull( $desc );
+	}
+
+	public function testQuickSearchStripsMetacharacters(): void {
+		// Wildcard/comparator glyphs in the user term are stripped so the word is a
+		// literal substring; the only * / ~ are the ones we wrap with.
+		$desc = $this->translator->quickSearchDescription(
+			'Lon*don', [ 'City' ], self::identity(), self::kind( 'like-text' ), false
+		);
+		$this->assertNotNull( $desc );
+		$qs = $desc->getQueryString();
+		$this->assertStringContainsString( '*London*', $qs );
+		$this->assertStringNotContainsString( 'Lon*don', $qs );
+	}
+
+	public function testQuickSearchSkipsNonSearchableColumns(): void {
+		// The only column is not searchable (kind null) and the subject is excluded.
+		$desc = $this->translator->quickSearchDescription(
+			'x', [ 'Flag' ], self::identity(), self::kind( null ), false
+		);
+		$this->assertNull( $desc );
+	}
+
+	public function testQuickSearchResolvesAliasedColumnToProperty(): void {
+		$propertyOf = static fn ( string $field ): string => [ 'Pop' => 'Has population' ][$field] ?? $field;
+		$desc = $this->translator->quickSearchDescription(
+			'1000', [ 'Pop' ], $propertyOf, self::kind( 'eq-number' ), false
+		);
+		$this->assertNotNull( $desc );
+		$qs = $desc->getQueryString();
+		$this->assertStringContainsString( 'Has population', $qs );
+		$this->assertStringNotContainsString( 'Pop]]', $qs );
+	}
 }

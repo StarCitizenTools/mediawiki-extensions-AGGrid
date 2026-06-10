@@ -719,6 +719,74 @@ class SmwDataSourceTest extends MediaWikiIntegrationTestCase {
 	}
 
 	// -------------------------------------------------------------------------
+	// Quick search
+	// -------------------------------------------------------------------------
+
+	public function testGetPageAndsQuickSearchOntoQuery(): void {
+		$captured = null;
+		$source = $this->newDataSource( $this->queryResult( [] ), null, $captured );
+
+		$source->getPage( self::PAGE_ID, 0, 0, [], [], 50, 'berlin' );
+
+		$this->assertInstanceOf( Conjunction::class, $captured->getDescription() );
+		$this->assertStringContainsString(
+			'berlin',
+			$captured->getDescription()->getQueryString(),
+			'the quick-search term is ANDed onto the data query'
+		);
+	}
+
+	public function testCountQueryIncludesQuickSearch(): void {
+		$captured = null;
+		$allCaptured = null;
+		$source = $this->newDataSource(
+			$this->queryResult( [] ), null, $captured, 50, $allCaptured
+		);
+
+		$source->getPage( self::PAGE_ID, 0, 0, [], [], 50, 'berlin' );
+
+		$this->assertCount( 2, $allCaptured, 'getPage issues a data query then a count query' );
+		$this->assertStringContainsString(
+			'berlin',
+			$allCaptured[1]->getDescription()->getQueryString(),
+			'the filtered total counts against the same quick-search condition as the rows'
+		);
+	}
+
+	public function testGetPageQuickSearchAndsWithColumnFilter(): void {
+		$captured = null;
+		$source = $this->newDataSource( $this->queryResult( [] ), null, $captured );
+
+		$source->getPage(
+			self::PAGE_ID,
+			0,
+			0,
+			[],
+			[ self::CAPITAL => [ 'values' => [ 'Berlin' ] ] ],
+			50,
+			'xyz'
+		);
+
+		$this->assertInstanceOf( Conjunction::class, $captured->getDescription() );
+		$qs = $captured->getDescription()->getQueryString();
+		$this->assertStringContainsString( 'xyz', $qs, 'quick-search term present' );
+		$this->assertStringContainsString( 'Berlin', $qs, 'column filter value present' );
+	}
+
+	public function testGetPageEmptyQuickSearchAddsNoCondition(): void {
+		$captured = null;
+		$source = $this->newDataSource( $this->queryResult( [] ), null, $captured );
+
+		$source->getPage( self::PAGE_ID, 0, 0, [], [], 50, '   ' );
+
+		$this->assertNotInstanceOf(
+			Conjunction::class,
+			$captured->getDescription(),
+			'a blank quick-search term leaves the base description unwrapped'
+		);
+	}
+
+	// -------------------------------------------------------------------------
 	// Cache policy
 	// -------------------------------------------------------------------------
 

@@ -63,8 +63,12 @@ class GridPageHandler extends SimpleHandler {
 		$size = (int)( $params['size'] ?? self::SIZE_DEFAULT );
 		$size = max( self::SIZE_MIN, min( self::SIZE_MAX, $size ) );
 
+		$quickSearch = (string)( $params['q'] ?? '' );
+
 		try {
-			$page = $dataSource->getPage( $pageid, $index, $offset, $sortModel, $filterModel, $size );
+			$page = $dataSource->getPage(
+				$pageid, $index, $offset, $sortModel, $filterModel, $size, $quickSearch
+			);
 		} catch ( RuntimeException ) {
 			// Do not leak the backend exception message or stack to the client.
 			throw new LocalizedHttpException( new MessageValue( 'rest-bad-request' ), 400 );
@@ -123,6 +127,12 @@ class GridPageHandler extends SimpleHandler {
 				self::PARAM_SOURCE => 'query',
 				ParamValidator::PARAM_TYPE => 'string',
 				ParamValidator::PARAM_REQUIRED => false,
+			],
+			'q' => [
+				self::PARAM_SOURCE => 'query',
+				ParamValidator::PARAM_TYPE => 'string',
+				ParamValidator::PARAM_REQUIRED => false,
+				ParamValidator::PARAM_DEFAULT => '',
 			],
 			'size' => [
 				self::PARAM_SOURCE => 'query',

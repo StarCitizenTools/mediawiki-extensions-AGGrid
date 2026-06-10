@@ -182,7 +182,7 @@ class GridPageHandlerTest extends MediaWikiIntegrationTestCase {
 		$ds->method( 'getCachePolicy' )->willReturn( new CachePolicy( true, self::CACHE_MAX_AGE ) );
 		$ds->expects( $this->once() )
 			->method( 'getPage' )
-			->with( self::PAGE_ID, 0, 0, [], [], 200 )
+			->with( self::PAGE_ID, 0, 0, [], [], 200, '' )
 			->willReturn( new GridPage( [], 0 ) );
 
 		$handler = $this->newHandler( $this->smwSpec(), $ds );
@@ -195,7 +195,7 @@ class GridPageHandlerTest extends MediaWikiIntegrationTestCase {
 		$ds->method( 'getCachePolicy' )->willReturn( new CachePolicy( true, self::CACHE_MAX_AGE ) );
 		$ds->expects( $this->once() )
 			->method( 'getPage' )
-			->with( self::PAGE_ID, 0, 0, [], [], 1 )
+			->with( self::PAGE_ID, 0, 0, [], [], 1, '' )
 			->willReturn( new GridPage( [], 0 ) );
 
 		$handler = $this->newHandler( $this->smwSpec(), $ds );
@@ -211,7 +211,7 @@ class GridPageHandlerTest extends MediaWikiIntegrationTestCase {
 		$ds->method( 'getCachePolicy' )->willReturn( new CachePolicy( true, self::CACHE_MAX_AGE ) );
 		$ds->expects( $this->once() )
 			->method( 'getPage' )
-			->with( self::PAGE_ID, 0, 50, $sort, $filter, 25 )
+			->with( self::PAGE_ID, 0, 50, $sort, $filter, 25, '' )
 			->willReturn( new GridPage( [], 0 ) );
 
 		$handler = $this->newHandler( $this->smwSpec(), $ds );
@@ -224,12 +224,25 @@ class GridPageHandlerTest extends MediaWikiIntegrationTestCase {
 		$this->assertSame( 200, $response->getStatusCode() );
 	}
 
+	public function testQuickSearchParamIsPassedThrough(): void {
+		$ds = $this->createMock( BackendDataSource::class );
+		$ds->method( 'getCachePolicy' )->willReturn( new CachePolicy( true, self::CACHE_MAX_AGE ) );
+		$ds->expects( $this->once() )
+			->method( 'getPage' )
+			->with( self::PAGE_ID, 0, 0, [], [], 50, 'berlin' )
+			->willReturn( new GridPage( [], 0 ) );
+
+		$handler = $this->newHandler( $this->smwSpec(), $ds );
+		$response = $this->executeHandler( $handler, $this->request( [ 'q' => 'berlin' ] ) );
+		$this->assertSame( 200, $response->getStatusCode() );
+	}
+
 	public function testNegativeOffsetIsClampedToZero(): void {
 		$ds = $this->createMock( BackendDataSource::class );
 		$ds->method( 'getCachePolicy' )->willReturn( new CachePolicy( true, self::CACHE_MAX_AGE ) );
 		$ds->expects( $this->once() )
 			->method( 'getPage' )
-			->with( self::PAGE_ID, 0, 0, [], [], 50 )
+			->with( self::PAGE_ID, 0, 0, [], [], 50, '' )
 			->willReturn( new GridPage( [], 0 ) );
 
 		$handler = $this->newHandler( $this->smwSpec(), $ds );
@@ -242,7 +255,7 @@ class GridPageHandlerTest extends MediaWikiIntegrationTestCase {
 		$ds->method( 'getCachePolicy' )->willReturn( new CachePolicy( true, self::CACHE_MAX_AGE ) );
 		$ds->expects( $this->once() )
 			->method( 'getPage' )
-			->with( self::PAGE_ID, 0, 0, [], [], 50 )
+			->with( self::PAGE_ID, 0, 0, [], [], 50, '' )
 			->willReturn( new GridPage( [], 0 ) );
 
 		$handler = $this->newHandler( $this->smwSpec(), $ds );
