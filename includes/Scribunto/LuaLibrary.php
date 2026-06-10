@@ -50,6 +50,8 @@ class LuaLibrary extends LibraryBase {
 	public function render( $gridOptions = null ): array {
 		$this->checkType( 'mw.ext.aggrid.render', 1, $gridOptions, 'table' );
 
+		$this->validateQuickSearch( $gridOptions['quickSearch'] ?? null );
+
 		// A `source` descriptor routes to the backend path (query stored, not rows).
 		if ( isset( $gridOptions['source'] ) ) {
 			return $this->renderSource( $gridOptions );
@@ -94,6 +96,57 @@ class LuaLibrary extends LibraryBase {
 
 		// Strip marker keeps the parser from reprocessing the raw HTML.
 		return [ $parser->insertStripItem( $html ) ];
+	}
+
+	/**
+	 * Validate the quickSearch gridOption (issue #21): boolean, or a table with
+	 * optional `placeholder` (string) and `debounceMs` (non-negative number) keys.
+	 * Unknown table keys are rejected to catch typos.
+	 *
+	 * Called before the source branch so both paths share one feedback point, and a
+	 * bad shape never survives into a parser-cached placeholder. The option itself
+	 * is a pure client concern: it rides the options JSON and mountGrid consumes it.
+	 * Unlike the silently type-gated display keys in parsePrintouts, this throws:
+	 * it is the extension's own top-level option, and silent gating would make a
+	 * mistyped quickSearch vanish with zero feedback.
+	 * An empty table is indistinguishable from an empty list and is allowed (the
+	 * client treats it as `true`).
+	 *
+	 * @param mixed $quickSearch
+	 * @throws LuaError If the shape is invalid.
+	 */
+	private function validateQuickSearch( $quickSearch ): void {
+		if ( $quickSearch === null || is_bool( $quickSearch ) ) {
+			return;
+		}
+		if ( !is_array( $quickSearch ) ) {
+			throw new LuaError(
+				'mw.ext.aggrid.render: quickSearch must be a boolean or a table'
+			);
+		}
+		foreach ( $quickSearch as $key => $value ) {
+			if ( $key === 'placeholder' ) {
+				if ( !is_string( $value ) ) {
+					throw new LuaError(
+						'mw.ext.aggrid.render: quickSearch.placeholder must be a string'
+					);
+				}
+			} elseif ( $key === 'debounceMs' ) {
+				if (
+					( !is_int( $value ) && !is_float( $value ) ) ||
+					!is_finite( $value ) ||
+					$value < 0
+				) {
+					throw new LuaError(
+						'mw.ext.aggrid.render: quickSearch.debounceMs must be a non-negative number'
+					);
+				}
+			} else {
+				throw new LuaError(
+					'mw.ext.aggrid.render: unknown quickSearch key "' . $key . '"'
+				);
+			}
+		}
 	}
 
 	/**
