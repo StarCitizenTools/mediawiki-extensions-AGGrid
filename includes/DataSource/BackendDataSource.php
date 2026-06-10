@@ -22,6 +22,8 @@ interface BackendDataSource {
 	 * @param array $sortModel AG Grid sort model: list of { colId, sort } objects.
 	 * @param array $filterModel AG Grid filter model: map of colId → filter descriptor.
 	 * @param int $size Maximum number of rows to return.
+	 * @param string $quickSearch Free-text quick-search term, ANDed onto the query and
+	 *   matched across the subject and the searchable columns; '' applies no constraint.
 	 * @return GridPage Carries the page rows and the total count of all matching rows
 	 *   (across every page) so the client can render its native pagination bar.
 	 */
@@ -31,7 +33,8 @@ interface BackendDataSource {
 		int $offset,
 		array $sortModel,
 		array $filterModel,
-		int $size
+		int $size,
+		string $quickSearch = ''
 	): GridPage;
 
 	/**

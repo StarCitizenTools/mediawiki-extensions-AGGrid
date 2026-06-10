@@ -239,6 +239,23 @@ describe( 'mountGrid', () => {
 		} );
 	}
 
+	// As above, but the returned api carries the infinite-row-model methods the
+	// backend quick-search reset uses, so backend toolbar tests can assert on them.
+	function stubBackendCreateGrid() {
+		const api = {
+			setGridOption: vi.fn(),
+			paginationGoToFirstPage: vi.fn(),
+			purgeInfiniteCache: vi.fn()
+		};
+		global.agGrid.createGrid = vi.fn( ( container ) => {
+			const root = document.createElement( 'div' );
+			root.className = 'ag-root-wrapper';
+			container.appendChild( root );
+			return api;
+		} );
+		return api;
+	}
+
 	it( 'consumes quickSearch and builds the toolbar before gridReady fires', () => {
 		stubCreateGridWithRootWrapper();
 		let toolbarAtFire = null;
@@ -284,8 +301,8 @@ describe( 'mountGrid', () => {
 		expect( off.querySelector( '.ext-aggrid-toolbar' ) ).toBeNull();
 	} );
 
-	it( 'consumes quickSearch but builds no toolbar on the backend path', () => {
-		stubCreateGridWithRootWrapper();
+	it( 'builds the quick-search toolbar on the backend path', () => {
+		stubBackendCreateGrid();
 		mockRest( vi.fn().mockResolvedValue( { rows: [], total: 0 } ) );
 
 		const el = makeBackendEl( '{"columnDefs":[{"field":"n"}],"quickSearch":true}' );
@@ -293,7 +310,37 @@ describe( 'mountGrid', () => {
 
 		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
 		expect( 'quickSearch' in opts ).toBe( false );
-		expect( el.querySelector( '.ext-aggrid-toolbar' ) ).toBeNull();
+		expect( el.querySelector( '.ext-aggrid-toolbar input' ) ).not.toBeNull();
+
+		delete global.mw.Rest;
+	} );
+
+	it( 'routes the search term to the server and resets paging on the backend path', async () => {
+		const api = stubBackendCreateGrid();
+		const get = vi.fn().mockResolvedValue( { rows: [], total: 0 } );
+		mockRest( get );
+
+		const el = makeBackendEl( '{"columnDefs":[{"field":"n"}],"quickSearch":{"debounceMs":0}}' );
+		mountGrid( el );
+
+		const input = el.querySelector( '.ext-aggrid-toolbar__input' );
+		input.value = 'frigate';
+		input.dispatchEvent( new window.Event( 'input' ) );
+
+		// Applying a term resets to the first page and purges the infinite cache so
+		// the new total and rows reload from offset 0.
+		expect( api.paginationGoToFirstPage ).toHaveBeenCalledTimes( 1 );
+		expect( api.purgeInfiniteCache ).toHaveBeenCalledTimes( 1 );
+
+		// The next block fetch carries the term as q=.
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		opts.datasource.getRows( makeRowsParams( { startRow: 0, endRow: 50 } ) );
+		await new Promise( ( r ) => {
+			setTimeout( r, 0 );
+		} );
+
+		const url = decodeURIComponent( get.mock.calls[ 0 ][ 0 ] );
+		expect( url ).toContain( 'q=frigate' );
 
 		delete global.mw.Rest;
 	} );
@@ -404,6 +451,8 @@ describe( 'mountGrid', () => {
 		expect( url ).toContain( 'offset=0' );
 		expect( url ).toContain( 'size=50' );
 		expect( url ).not.toContain( 'cursor=' );
+		// No quick-search term active → no q parameter.
+		expect( url ).not.toContain( 'q=' );
 		// total is passed as the absolute last row so the page bar shows all pages.
 		expect( params.successCallback ).toHaveBeenCalledWith( [ { name: 'Aurora' } ], 137 );
 		expect( params.failCallback ).not.toHaveBeenCalled();

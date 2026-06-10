@@ -73,7 +73,8 @@ class SmwDataSource implements BackendDataSource {
 		int $offset,
 		array $sortModel,
 		array $filterModel,
-		int $size
+		int $size,
+		string $quickSearch = ''
 	): GridPage {
 		$spec = $this->resolveSpec( $pageId, $gridIndex );
 
@@ -84,16 +85,23 @@ class SmwDataSource implements BackendDataSource {
 		$filterOf = $this->filterPropertyResolver( $spec );
 
 		return $this->withRaisedLimits( function () use (
-			$spec, $displayOf, $filterOf, $offset, $size, $sortModel, $filterModel
+			$spec, $displayOf, $filterOf, $offset, $size, $sortModel, $filterModel, $quickSearch
 		): GridPage {
 			$query = $this->buildQuery( $spec, $spec['printouts'] ?? [] );
 			$query->setOffset( $offset );
 			$query->setLimit( $size );
 			$query->setSortKeys( $this->filterTranslator->toSortKeys( $sortModel, $displayOf ) );
 
-			$filterDesc = $this->buildFilterDescription( $filterModel, $filterOf );
-			if ( $filterDesc !== null ) {
-				$query->setDescription( new Conjunction( [ $query->getDescription(), $filterDesc ] ) );
+			// Column filters and the free-text quick search are independent conditions
+			// ANDed onto the base query (and onto the count query below, identically).
+			$conditions = array_filter( [
+				$this->buildFilterDescription( $filterModel, $filterOf ),
+				$this->buildQuickSearchDescription( $spec, $quickSearch, $displayOf ),
+			] );
+			if ( $conditions !== [] ) {
+				$query->setDescription(
+					new Conjunction( array_merge( [ $query->getDescription() ], $conditions ) )
+				);
 			}
 
 			$result = $this->store->getQueryResult( $query );
@@ -106,7 +114,7 @@ class SmwDataSource implements BackendDataSource {
 				$resultRow = $result->getNext();
 			}
 
-			$total = $this->countFor( $spec, $filterModel );
+			$total = $this->countFor( $spec, $filterModel, $quickSearch );
 
 			return new GridPage( $rows, $total );
 		} );
@@ -185,14 +193,20 @@ class SmwDataSource implements BackendDataSource {
 	 * @phpcs:ignore Generic.Files.LineLength
 	 * @param array{query: string, printouts?: string[], mainlabel?: ?string, fields?: array<string,string>, facets?: array<string,string>} $spec
 	 * @param array<string, array<string,mixed>> $filterModel
+	 * @param string $quickSearch
 	 */
-	private function countFor( array $spec, array $filterModel ): int {
+	private function countFor( array $spec, array $filterModel, string $quickSearch ): int {
 		$countQuery = $this->buildQuery( $spec, [] );
 
-		$filterDesc = $this->buildFilterDescription( $filterModel, $this->filterPropertyResolver( $spec ) );
-		if ( $filterDesc !== null ) {
+		// Mirror getPage exactly: AND the same column-filter and quick-search
+		// conditions so the reported total matches the rows actually returned.
+		$conditions = array_filter( [
+			$this->buildFilterDescription( $filterModel, $this->filterPropertyResolver( $spec ) ),
+			$this->buildQuickSearchDescription( $spec, $quickSearch, $this->displayPropertyResolver( $spec ) ),
+		] );
+		if ( $conditions !== [] ) {
 			$countQuery->setDescription(
-				new Conjunction( [ $countQuery->getDescription(), $filterDesc ] )
+				new Conjunction( array_merge( [ $countQuery->getDescription() ], $conditions ) )
 			);
 		}
 
@@ -225,6 +239,38 @@ class SmwDataSource implements BackendDataSource {
 				$this->propertyType( $propertyOf( $field ) )
 			),
 			$propertyOf
+		);
+	}
+
+	/**
+	 * Build the quick-search Description for a free-text term over the spec's display
+	 * columns plus the subject, or null when the term is blank.
+	 *
+	 * Quick search matches what the user sees, so it resolves and classifies each
+	 * column by its DISPLAY property (not its filter facet, unlike column filters).
+	 * The subject (page name) is searched unless the grid suppresses it (mainlabel '-').
+	 *
+	 * @phpcs:ignore Generic.Files.LineLength
+	 * @param array{printouts?: string[], fields?: array<string,string>, mainlabel?: ?string} $spec
+	 * @param string $quickSearch
+	 * @param callable $displayOf Callable( string $field ): string
+	 */
+	private function buildQuickSearchDescription(
+		array $spec,
+		string $quickSearch,
+		callable $displayOf
+	): ?Description {
+		if ( trim( $quickSearch ) === '' ) {
+			return null;
+		}
+		return $this->filterTranslator->quickSearchDescription(
+			$quickSearch,
+			array_keys( $this->declaredFields( $spec ) ),
+			$displayOf,
+			fn ( string $field ): ?string => $this->typeColumnMapper->searchKind(
+				$this->propertyType( $displayOf( $field ) )
+			),
+			( $spec['mainlabel'] ?? null ) !== '-'
 		);
 	}
 

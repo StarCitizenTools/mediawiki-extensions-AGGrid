@@ -183,4 +183,45 @@ class TypeColumnMapperTest extends MediaWikiUnitTestCase {
 		$this->assertFalse( $this->mapper->filterComponent( '_rec' ), 'records have no filter' );
 		$this->assertFalse( $this->mapper->filterComponent( '_unknown' ), 'unknown ids fall back to none' );
 	}
+
+	// -------------------------------------------------------------------------
+	// searchKind() — how a column participates in quick search, null = not searched
+	// -------------------------------------------------------------------------
+
+	/**
+	 * @dataProvider provideSearchKind
+	 */
+	public function testSearchKind( string $typeId, ?string $expected ): void {
+		$this->assertSame( $expected, $this->mapper->searchKind( $typeId ) );
+	}
+
+	public static function provideSearchKind(): array {
+		return [
+			// Text-like: substring LIKE on the blob store.
+			'text' => [ '_txt', 'like-text' ],
+			'code' => [ '_cod', 'like-text' ],
+			'keyword' => [ '_keyw', 'like-text' ],
+			// Page: substring LIKE on the page name.
+			'page' => [ '_wpg', 'like-page' ],
+			// Date: precision range via the ~ comparator.
+			'date' => [ '_dat', 'like-date' ],
+			// Number / temperature: exact match (both parse a bare number).
+			'number' => [ '_num', 'eq-number' ],
+			'temperature' => [ '_tem', 'eq-number' ],
+			// Not searched: SMW's query builders return a match-everything
+			// ThingDescription for a ~*substring* (email/telephone) or a bare number
+			// (quantity needs an explicit unit), and a URI is scheme-anchored
+			// (~http://*foo*), so substring search on these is unreliable. Excluding
+			// them keeps the box honest rather than silently no-op.
+			'uri' => [ '_uri', null ],
+			'email' => [ '_ema', null ],
+			'telephone' => [ '_tel', null ],
+			'quantity' => [ '_qty', null ],
+			'boolean' => [ '_boo', null ],
+			'geo' => [ '_geo', null ],
+			'record' => [ '_rec', null ],
+			'compound record' => [ '_mlt_rec', null ],
+			'unknown' => [ '_unknown_type', null ],
+		];
+	}
 }

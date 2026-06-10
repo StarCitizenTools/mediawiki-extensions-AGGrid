@@ -143,6 +143,41 @@ describe( 'setup', () => {
 		vi.useRealTimers();
 	} );
 
+	it( 'calls a provided onApply instead of setGridOption(quickFilterText)', () => {
+		vi.useFakeTimers();
+		const { el } = makeMounted();
+		const api = makeApi();
+		const onApply = vi.fn();
+		setup( el, api, DEFAULTS, onApply );
+		const input = el.querySelector( '.ext-aggrid-toolbar__input' );
+
+		input.value = 'sed';
+		input.dispatchEvent( new window.Event( 'input' ) );
+		vi.advanceTimersByTime( 200 );
+
+		expect( onApply ).toHaveBeenCalledTimes( 1 );
+		expect( onApply ).toHaveBeenCalledWith( 'sed' );
+		// The injected apply takes over: AG Grid's client-side quick filter is not touched.
+		expect( api.setGridOption ).not.toHaveBeenCalled();
+		vi.useRealTimers();
+	} );
+
+	it( 'clears via onApply on Escape when one is provided', () => {
+		const { el } = makeMounted();
+		const api = makeApi();
+		const onApply = vi.fn();
+		setup( el, api, { placeholder: null, debounceMs: 0 }, onApply );
+		const input = el.querySelector( '.ext-aggrid-toolbar__input' );
+
+		input.value = 'x';
+		input.dispatchEvent( new window.Event( 'input' ) );
+		input.dispatchEvent( new window.KeyboardEvent( 'keydown', { key: 'Escape' } ) );
+
+		expect( input.value ).toBe( '' );
+		expect( onApply ).toHaveBeenLastCalledWith( '' );
+		expect( api.setGridOption ).not.toHaveBeenCalled();
+	} );
+
 	it( 'Escape cancels a pending debounced apply (no stale re-filter)', () => {
 		vi.useFakeTimers();
 		const { el } = makeMounted();

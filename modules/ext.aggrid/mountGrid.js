@@ -150,13 +150,18 @@ function prepareGridOptions( el, gridOptions ) {
  * @param {HTMLElement} el The .ext-aggrid container.
  * @param {Object} gridOptions Fully-prepared gridOptions.
  * @param {Object|null} [quickSearchConfig] Normalized quickSearch config to wire.
+ * @param {Function} [makeOnQuickSearch] Factory `( api ) => ( value ) => void` building
+ *   the quick-search apply handler once the api exists (it needs the api to drive
+ *   paging). Omitted on the client/inline paths (the box drives AG Grid's client-side
+ *   quick filter); the backend path injects a server-routing factory.
  * @return {Object} The AG Grid GridApi.
  */
-function createAndAnnounce( el, gridOptions, quickSearchConfig ) {
+function createAndAnnounce( el, gridOptions, quickSearchConfig, makeOnQuickSearch ) {
 	// agGrid is the global exposed by the vendored AG Grid bundle.
 	const api = agGrid.createGrid( el, gridOptions );
 	if ( quickSearchConfig ) {
-		quickSearch.setup( el, api, quickSearchConfig );
+		const onApply = makeOnQuickSearch ? makeOnQuickSearch( api ) : undefined;
+		quickSearch.setup( el, api, quickSearchConfig, onApply );
 	}
 	if ( typeof mw !== 'undefined' && mw.hook ) {
 		mw.hook( 'ext.aggrid.gridReady' ).fire( api, el, gridOptions );
@@ -219,9 +224,10 @@ function makeValuesSource( valuesUrl, field ) {
  * @param {number} limit Number of rows to request (the block size).
  * @param {Array} sortModel AG Grid sort model; serialized only when non-empty.
  * @param {Object} filterModel AG Grid filter model; serialized only when non-empty.
+ * @param {string} [quickSearchTerm] Free-text quick-search term; sent as `q` only when non-empty.
  * @return {string} The query string (no leading '?'), always carrying offset and limit.
  */
-function buildPageQuery( offset, limit, sortModel, filterModel ) {
+function buildPageQuery( offset, limit, sortModel, filterModel, quickSearchTerm ) {
 	const params = new URLSearchParams();
 	params.set( 'offset', String( offset ) );
 	// The REST endpoint names the page-size parameter "size".
@@ -231,6 +237,9 @@ function buildPageQuery( offset, limit, sortModel, filterModel ) {
 	}
 	if ( filterModel && Object.keys( filterModel ).length ) {
 		params.set( 'filter', JSON.stringify( filterModel ) );
+	}
+	if ( quickSearchTerm ) {
+		params.set( 'q', quickSearchTerm );
 	}
 	return params.toString();
 }
@@ -269,11 +278,17 @@ function mountBackend( el, gridOptions ) {
 		}
 	} );
 
+	// The active quick-search term lives here so the datasource reads the latest
+	// value on each block fetch; the toolbar mutates it and purges the cache below.
+	const state = { q: '' };
+
 	const datasource = {
 		getRows( params ) {
 			const offset = params.startRow;
 			const limit = params.endRow - params.startRow;
-			const query = buildPageQuery( offset, limit, params.sortModel, params.filterModel );
+			const query = buildPageQuery(
+				offset, limit, params.sortModel, params.filterModel, state.q
+			);
 			new mw.Rest().get( `${ pageUrl }?${ query }` )
 				.then( ( data ) => {
 					const rows = ( data && data.rows ) || [];
@@ -295,10 +310,19 @@ function mountBackend( el, gridOptions ) {
 		}
 	};
 
-	// prepareGridOptions consumes quickSearch, but the config is deliberately not
-	// wired here: AG Grid's quick filter only supports the client-side row model,
-	// so backend grids get no search box (#21; server-side routing is a follow-up).
-	prepareGridOptions( el, gridOptions );
+	// prepareGridOptions consumes the quickSearch option. Unlike the client paths
+	// (which drive AG Grid's client-model-only quick filter), the backend wires the
+	// box to a server round-trip: typing updates state.q, resets to the first page,
+	// and purges the infinite cache so the new total and rows reload from offset 0.
+	const quickSearchConfig = prepareGridOptions( el, gridOptions );
+	// Built once the api exists (createAndAnnounce supplies it): on each apply, stash
+	// the term, jump to the first page, and purge the infinite cache so the new total
+	// and rows reload from offset 0.
+	const makeOnQuickSearch = ( api ) => ( value ) => {
+		state.q = value;
+		api.paginationGoToFirstPage();
+		api.purgeInfiniteCache();
+	};
 	// Configure the Infinite Row Model over the offset datasource. The server's
 	// total count drives the page bar; offset paging is stateless so AG Grid can
 	// request any page directly.
@@ -316,7 +340,7 @@ function mountBackend( el, gridOptions ) {
 	gridOptions.datasource = datasource;
 
 	// The Infinite Row Model fetches block 0 automatically on mount.
-	createAndAnnounce( el, gridOptions );
+	createAndAnnounce( el, gridOptions, quickSearchConfig, makeOnQuickSearch );
 }
 
 /**
