@@ -4,6 +4,7 @@ declare( strict_types=1 );
 
 namespace MediaWiki\Extension\AGGrid\Tests\Integration\Bucket;
 
+use MediaWiki\Config\ConfigException;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketColumnMapper;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketSchemaReader;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketSourceCompiler;
@@ -256,5 +257,17 @@ class BucketSourceCompilerTest extends MediaWikiIntegrationTestCase {
 			'fields' => [ 'value' ],
 			'join' => [ [ 'bucket' => 'skill' ] ],
 		] );
+	}
+
+	public function testUnconfiguredBucketDbBecomesLuaError(): void {
+		// An unconfigured Bucket DB surfaces from getFields() as a ConfigException; the
+		// compiler must turn it into a clear author LuaError rather than a 500.
+		$reader = $this->createMock( BucketSchemaReader::class );
+		$reader->method( 'getFields' )
+			->willThrowException( new ConfigException( 'BucketDBuser is required' ) );
+		$compiler = new BucketSourceCompiler( $reader, new BucketColumnMapper() );
+
+		$this->expectException( LuaError::class );
+		$compiler->compile( [ 'bucket' => 'item', 'fields' => [ 'value' ] ] );
 	}
 }

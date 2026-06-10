@@ -4,6 +4,7 @@ declare( strict_types=1 );
 
 namespace MediaWiki\Extension\AGGrid\DataSource\Bucket;
 
+use MediaWiki\Config\ConfigException;
 use MediaWiki\Extension\Scribunto\Engines\LuaCommon\LuaError;
 
 /**
@@ -90,7 +91,16 @@ class BucketSourceCompiler {
 	 * @throws LuaError
 	 */
 	private function loadSchema( string $bucket ): array {
-		$fields = $this->schemaReader->getFields( $bucket );
+		try {
+			$fields = $this->schemaReader->getFields( $bucket );
+		} catch ( ConfigException ) {
+			// Bucket is loaded but its DB account is unconfigured. Surface a clear author
+			// error at parse time rather than letting the exception become a 500.
+			throw new LuaError(
+				'mw.ext.aggrid.render: the Bucket database is not configured ' .
+				'($wgBucketDBuser / $wgBucketDBpassword)'
+			);
+		}
 		if ( $fields === [] ) {
 			throw new LuaError( 'mw.ext.aggrid.render: unknown bucket "' . $bucket . '"' );
 		}

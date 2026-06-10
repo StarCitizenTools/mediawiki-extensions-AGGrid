@@ -4,7 +4,9 @@ declare( strict_types=1 );
 
 namespace MediaWiki\Extension\AGGrid\DataSource\Bucket;
 
+use MediaWiki\Config\ConfigException;
 use MediaWiki\Extension\Bucket\Bucket;
+use MediaWiki\Extension\Bucket\BucketException;
 use MediaWiki\Extension\Bucket\BucketQuery;
 
 /**
@@ -13,6 +15,12 @@ use MediaWiki\Extension\Bucket\BucketQuery;
  *
  * Only ever instantiated when the Bucket extension is loaded (the data-source factory
  * is gated on it in ServiceWiring).
+ *
+ * Bucket signals query-construction problems (a dropped bucket/field, an invalid join
+ * — possible when a stored spec drifts from the live schema) with BucketException, and
+ * a missing DB account with ConfigException; both extend LogicException. This adapter
+ * rethrows them as {@see BucketQueryException} (a RuntimeException) so the REST handlers'
+ * RuntimeException catch maps them to a clean 400 instead of leaking a 500.
  */
 class BucketRunner {
 
@@ -26,7 +34,11 @@ class BucketRunner {
 	 *   Boolean -> bool, repeated -> array).
 	 */
 	public function select( array $data ): array {
-		[ $rows ] = Bucket::runSelect( $data, null );
+		try {
+			[ $rows ] = Bucket::runSelect( $data, null );
+		} catch ( BucketException | ConfigException $e ) {
+			throw new BucketQueryException( 'AGGrid: Bucket query failed: ' . $e->getMessage(), 0, $e );
+		}
 		return $rows;
 	}
 
@@ -42,6 +54,10 @@ class BucketRunner {
 	 * @return int
 	 */
 	public function count( array $data ): int {
-		return ( new BucketQuery( $data ) )->getSelectQueryBuilder()->fetchRowCount();
+		try {
+			return ( new BucketQuery( $data ) )->getSelectQueryBuilder()->fetchRowCount();
+		} catch ( BucketException | ConfigException $e ) {
+			throw new BucketQueryException( 'AGGrid: Bucket count failed: ' . $e->getMessage(), 0, $e );
+		}
 	}
 }
