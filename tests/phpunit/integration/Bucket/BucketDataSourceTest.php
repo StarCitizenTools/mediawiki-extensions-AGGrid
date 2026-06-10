@@ -247,11 +247,16 @@ class BucketDataSourceTest extends MediaWikiIntegrationTestCase {
 		);
 	}
 
-	public function testCountQueryBounded(): void {
+	public function testCountQueryBoundedAndSingleField(): void {
 		$countCaptured = null;
 		$source = $this->newDataSource( [], 0, null, $unused, $countCaptured );
 		$source->getPage( self::PAGE_ID, 0, 0, [], [], 10 );
 		$this->assertSame( 5000, $countCaptured['limit_arg'], 'count is bounded by MAX_LIMIT' );
+		$this->assertSame(
+			[ 'page_name' ],
+			$countCaptured['selects'],
+			'count query selects a single non-null column (fetchRowCount requires one field)'
+		);
 	}
 
 	// -------------------------------------------------------------------------

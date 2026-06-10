@@ -35,6 +35,13 @@ class BucketDataSource implements BackendDataSource {
 	 */
 	private const COUNT_LIMIT = 5000;
 
+	/**
+	 * Single non-null column the count query selects. fetchRowCount() requires at most
+	 * one field; page_name is a system Page field present and non-null on every primary
+	 * row (left joins preserve it), so COUNT(page_name) equals the result row count.
+	 */
+	private const COUNT_FIELD = 'page_name';
+
 	public function __construct(
 		private readonly BucketRunner $runner,
 		private readonly SourceSpecStore $specStore,
@@ -78,7 +85,11 @@ class BucketDataSource implements BackendDataSource {
 			$rows[] = $this->mapRow( $resultRow, $spec );
 		}
 
+		// fetchRowCount() requires a single selected field, so the count query selects
+		// just the primary page_name (non-null) instead of the display columns. The join
+		// and filters stay, so the count matches the rows query.
 		$countData = $this->baseData( $spec, $filterOperands );
+		$countData['selects'] = [ self::COUNT_FIELD ];
 		$countData['limit_arg'] = self::COUNT_LIMIT;
 		$total = $this->runner->count( $countData );
 

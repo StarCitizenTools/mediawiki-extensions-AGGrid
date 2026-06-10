@@ -33,10 +33,12 @@ class BucketRunner {
 	/**
 	 * Count the rows matching a Bucket query-input array.
 	 *
-	 * The total is bounded by the query's LIMIT, so callers raise limit_arg to
-	 * {@see BucketQuery::MAX_LIMIT} for the count query.
+	 * Uses SelectQueryBuilder::fetchRowCount(), which requires the query to select at
+	 * most one field — so callers must reduce the count query to a single non-null
+	 * column (see {@see BucketDataSource}). The total is bounded by the query's LIMIT,
+	 * so callers raise limit_arg to {@see BucketQuery::MAX_LIMIT} for the count query.
 	 *
-	 * @param array $data Bucket query-input array.
+	 * @param array $data Bucket query-input array selecting exactly one non-null column.
 	 * @return int
 	 */
 	public function count( array $data ): int {
