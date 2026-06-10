@@ -2,7 +2,10 @@
 
 declare( strict_types=1 );
 
+use MediaWiki\Extension\AGGrid\DataSource\Backend;
 use MediaWiki\Extension\AGGrid\DataSource\BackendDataSource;
+use MediaWiki\Extension\AGGrid\DataSource\BackendDescriptor;
+use MediaWiki\Extension\AGGrid\DataSource\BackendRegistry;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketBackend;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketColumnMapper;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketDataSource;
@@ -47,6 +50,27 @@ return [
 			};
 		}
 		return new DataSourceRegistry( $factories );
+	},
+	'AGGrid.BackendRegistry' => static function ( MediaWikiServices $services ): BackendRegistry {
+		return new BackendRegistry(
+			[
+				new BackendDescriptor(
+					'smw',
+					'SemanticMediaWiki',
+					static function () use ( $services ): Backend {
+						return $services->getService( 'AGGrid.SmwBackend' );
+					}
+				),
+				new BackendDescriptor(
+					'bucket',
+					'Bucket',
+					static function () use ( $services ): Backend {
+						return $services->getService( 'AGGrid.BucketBackend' );
+					}
+				),
+			],
+			static fn ( string $ext ): bool => ExtensionRegistry::getInstance()->isLoaded( $ext )
+		);
 	},
 	'AGGrid.BackendCacheMaxAge' => static function ( MediaWikiServices $services ): int {
 		return (int)$services->getMainConfig()->get( 'AGGridBackendCacheMaxAge' );
