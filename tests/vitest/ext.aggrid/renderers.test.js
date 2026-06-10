@@ -109,4 +109,20 @@ describe( 'built-in column types', () => {
 		} );
 	} );
 
+	it( 'derives quick-filter text from the same scalar as valueFormatter', () => {
+		// AG Grid derives quick-filter text from the RAW value (never valueFormatter);
+		// getQuickFilterText maps the object value to its displayed text so quick
+		// search matches what the user sees instead of '[object Object]'.
+		const types = buildColumnTypes();
+		expect( types.aggridLink.getQuickFilterText( { value: { text: 'Aurora' } } ) )
+			.toBe( 'Aurora' );
+		expect( types.aggridImage.getQuickFilterText( { value: { alt: 'Aurora' } } ) )
+			.toBe( 'Aurora' );
+		expect( types.aggridLinkList.getQuickFilterText(
+			{ value: { links: [ { text: 'A' }, { text: 'B' } ] } }
+		) ).toBe( 'A, B' );
+		// Absent values degrade to '' (never the string "undefined").
+		expect( types.aggridLink.getQuickFilterText( { value: null } ) ).toBe( '' );
+	} );
+
 } );

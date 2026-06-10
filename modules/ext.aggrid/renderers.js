@@ -2,10 +2,11 @@
 //
 // Renderers are PURE and SYNCHRONOUS: value -> DOM, never any network. Link hrefs and
 // thumbnail src are resolved server-side (Lua/PHP) before the JSON boundary, so a
-// renderer only builds safe DOM from an already-resolved value. Sort, filter, quick
-// search and CSV export operate on a derived scalar via valueFormatter, never on the
-// object. "Linked" is an orthogonal modifier: any value carrying an href is wrapped in
-// an anchor by withLink, so content types stay additive instead of combinatorial.
+// renderer only builds safe DOM from an already-resolved value. Sort, filter, CSV
+// export (valueFormatter/comparator) and quick search (getQuickFilterText) operate on
+// a derived scalar, never on the object. "Linked" is an orthogonal modifier: any value
+// carrying an href is wrapped in an anchor by withLink, so content types stay additive
+// instead of combinatorial.
 
 // Only safe link schemes. hrefs are MediaWiki-generated server-side; this is defence in
 // depth against a hand-built value.
@@ -107,24 +108,30 @@ function compareBy( extract ) {
 	return ( a, b ) => String( extract( a ) ).localeCompare( String( extract( b ) ) );
 }
 
-// Each entry is a native AG Grid columnType (cellRenderer + sort/filter scalar). The
+// Each entry is a native AG Grid columnType (cellRenderer + sort/filter scalars). The
 // cellRenderers here are link-unaware; buildColumnTypes() wraps them with withLink.
-// valueFormatter drives display/filter/quick-search/export; comparator drives sort —
-// both operate on the derived scalar, never the raw object.
+// valueFormatter drives display/filter/export; getQuickFilterText drives quick search
+// (AG Grid derives quick-filter text from the raw value (or `filterValueGetter`) —
+// never valueFormatter — so without it an object value would match as
+// '[object Object]'); comparator drives sort. All operate on the derived scalar,
+// never the raw object.
 const COLUMN_TYPES = {
 	aggridLink: {
 		cellRenderer: linkEl,
 		valueFormatter: ( p ) => linkText( p.value ),
+		getQuickFilterText: ( p ) => linkText( p.value ),
 		comparator: compareBy( linkText )
 	},
 	aggridImage: {
 		cellRenderer: imageEl,
 		valueFormatter: ( p ) => imageAlt( p.value ),
+		getQuickFilterText: ( p ) => imageAlt( p.value ),
 		comparator: compareBy( imageAlt )
 	},
 	aggridLinkList: {
 		cellRenderer: linkListEl,
 		valueFormatter: ( p ) => listText( p.value ),
+		getQuickFilterText: ( p ) => listText( p.value ),
 		comparator: compareBy( listText )
 	}
 };
