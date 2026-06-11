@@ -4,6 +4,9 @@ declare( strict_types=1 );
 
 namespace MediaWiki\Extension\AGGrid\DataSource\Bucket;
 
+use MediaWiki\Extension\AGGrid\DataSource\AbstractFilterModelWalker;
+use MediaWiki\Extension\AGGrid\DataSource\FilterOperator;
+
 /**
  * Translates AG Grid sort/filter models into Bucket query-input structures.
  *
@@ -20,16 +23,10 @@ namespace MediaWiki\Extension\AGGrid\DataSource\Bucket;
  * group. NULL is expressed with the '&&NULL&&' sentinel that BucketQuery converts to a
  * real NULL.
  */
-class BucketFilterTranslator {
+class BucketFilterTranslator extends AbstractFilterModelWalker {
 
 	/** Sentinel BucketQuery converts to a real NULL value (valid with =/!= only). */
 	private const NULL_SENTINEL = '&&NULL&&';
-
-	/** @var array<string,string> AG Grid sort direction -> Bucket direction. */
-	private const SORT_DIR = [
-		'asc' => 'ASC',
-		'desc' => 'DESC',
-	];
 
 	/**
 	 * Convert an AG Grid filterModel to a list of Bucket `where` operands.
@@ -47,7 +44,8 @@ class BucketFilterTranslator {
 			if ( $family === 'none' ) {
 				continue;
 			}
-			$operand = $this->columnOperand( $selectOf( $colId ), $model, $family );
+			/** @var array|null $operand */
+			$operand = $this->walkColumn( $selectOf( $colId ), $model, $family );
 			if ( $operand !== null ) {
 				$operands[] = $operand;
 			}
@@ -76,38 +74,20 @@ class BucketFilterTranslator {
 	}
 
 	// -------------------------------------------------------------------------
-	// Internals
+	// Leaf hooks (the base owns the set/combined/simple dispatch and combined descent)
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Build one column's operand: set, combined, or simple (number).
+	 * @inheritDoc
 	 *
-	 * @param string $select Bucket select string (possibly qualified, e.g. 'skill.category').
-	 * @param array<string,mixed> $model
-	 * @param string $family
-	 * @return array|null
-	 */
-	private function columnOperand( string $select, array $model, string $family ): ?array {
-		// Set filter: detected by presence of 'values'.
-		if ( isset( $model['values'] ) ) {
-			return $this->setOperand( $select, $model );
-		}
-		// Combined filter: { operator, conditions }.
-		if ( isset( $model['operator'] ) && isset( $model['conditions'] ) ) {
-			return $this->combinedOperand( $select, $model, $family );
-		}
-		return $this->simpleOperand( $select, $model, $family );
-	}
-
-	/**
-	 * Build a set-filter operand. Include -> OR of equalities; exclude -> AND of
-	 * inequalities. Always wrapped in a group (never collapsed) so repeated-field
-	 * conditions route through Bucket's subquery path.
+	 * Include -> OR of equalities; exclude -> AND of inequalities. ALWAYS wrapped in a
+	 * group (never collapsed, even for a single value) so repeated-field conditions route
+	 * through Bucket's subquery path.
 	 *
-	 * @param string $select
+	 * @param string $col Bucket select string (possibly qualified, e.g. 'skill.category').
 	 * @param array<string,mixed> $model
 	 */
-	private function setOperand( string $select, array $model ): ?array {
+	protected function emitSet( string $col, array $model ): ?array {
 		$values = $model['values'] ?? [];
 		if ( count( $values ) === 0 ) {
 			return null;
@@ -116,49 +96,35 @@ class BucketFilterTranslator {
 		$op = $exclude ? '!=' : '=';
 		$operands = [];
 		foreach ( $values as $value ) {
-			$operands[] = [ $select, $op, (string)$value ];
+			$operands[] = [ $col, $op, (string)$value ];
 		}
 		return [ 'op' => $exclude ? 'AND' : 'OR', 'operands' => $operands ];
 	}
 
 	/**
-	 * Build a combined { operator, conditions } operand by mapping each condition and
-	 * grouping. A single surviving condition collapses to the bare operand.
+	 * @inheritDoc
 	 *
-	 * @param string $select
-	 * @param array<string,mixed> $model
-	 * @param string $family
+	 * Only the number family is expressible in Bucket (no LIKE/date); other families
+	 * yield no operand.
+	 *
+	 * @param string $col Bucket select string.
+	 * @param array<string,mixed> $condition
 	 */
-	private function combinedOperand( string $select, array $model, string $family ): ?array {
-		$parts = [];
-		foreach ( $model['conditions'] as $condition ) {
-			$part = $this->simpleOperand( $select, $condition, $family );
-			if ( $part !== null ) {
-				$parts[] = $part;
-			}
-		}
-		if ( count( $parts ) === 0 ) {
-			return null;
-		}
-		if ( count( $parts ) === 1 ) {
-			return $parts[0];
-		}
-		return [ 'op' => $model['operator'] === 'OR' ? 'OR' : 'AND', 'operands' => $parts ];
+	protected function emitSimple( string $col, array $condition, string $family ): ?array {
+		return match ( $family ) {
+			'number' => $this->numberOperand( $col, $condition ),
+			default => null,
+		};
 	}
 
 	/**
-	 * Dispatch a simple (non-set, non-combined) condition by family. Only the number
-	 * family is expressible; other families yield no operand.
+	 * @inheritDoc
 	 *
-	 * @param string $select
-	 * @param array<string,mixed> $condition
-	 * @param string $family
+	 * @param array $parts
+	 * @return array
 	 */
-	private function simpleOperand( string $select, array $condition, string $family ): ?array {
-		return match ( $family ) {
-			'number' => $this->numberOperand( $select, $condition ),
-			default => null,
-		};
+	protected function combine( string $operator, array $parts ): array {
+		return [ 'op' => $operator, 'operands' => $parts ];
 	}
 
 	/**
@@ -194,7 +160,7 @@ class BucketFilterTranslator {
 			return [ $select, '!=', self::NULL_SENTINEL ];
 		}
 
-		$op = $this->numericComparator( $type );
+		$op = $this->operator( $type );
 		$value = $condition['filter'] ?? null;
 		if ( $op === null || $value === null ) {
 			return null;
@@ -203,17 +169,18 @@ class BucketFilterTranslator {
 	}
 
 	/**
-	 * Map an AG Grid number filter type to a Bucket comparison operator.
+	 * Map an AG Grid number filter type to a Bucket comparison operator via the shared
+	 * {@see FilterOperator} table. Null for a type with no comparison operator.
 	 */
-	private function numericComparator( string $type ): ?string {
-		return match ( $type ) {
-			'equals' => '=',
-			'notEqual' => '!=',
-			'greaterThan' => '>',
-			'greaterThanOrEqual' => '>=',
-			'lessThan' => '<',
-			'lessThanOrEqual' => '<=',
-			default => null,
+	private function operator( string $type ): ?string {
+		return match ( $this->operatorFor( $type ) ) {
+			FilterOperator::Equals => '=',
+			FilterOperator::NotEqual => '!=',
+			FilterOperator::GreaterThan => '>',
+			FilterOperator::GreaterThanOrEqual => '>=',
+			FilterOperator::LessThan => '<',
+			FilterOperator::LessThanOrEqual => '<=',
+			null => null,
 		};
 	}
 }

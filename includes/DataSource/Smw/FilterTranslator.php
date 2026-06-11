@@ -4,6 +4,8 @@ declare( strict_types=1 );
 
 namespace MediaWiki\Extension\AGGrid\DataSource\Smw;
 
+use MediaWiki\Extension\AGGrid\DataSource\AbstractFilterModelWalker;
+use MediaWiki\Extension\AGGrid\DataSource\FilterOperator;
 use RuntimeException;
 use SMW\DataValueFactory;
 use SMW\DIProperty;
@@ -25,17 +27,7 @@ use SMW\Query\Language\ValueDescription;
  * - toDescription() maps a filterModel object (keyed by column field) to a
  *   Description tree that callers can AND onto a base SMW query.
  */
-class FilterTranslator {
-
-	/**
-	 * Map AG Grid sort direction strings to SMW sort direction strings.
-	 *
-	 * @var array<string,string>
-	 */
-	private const SORT_DIR = [
-		'asc' => 'ASC',
-		'desc' => 'DESC',
-	];
+class FilterTranslator extends AbstractFilterModelWalker {
 
 	// -------------------------------------------------------------------------
 	// Public API
@@ -128,7 +120,8 @@ class FilterTranslator {
 		foreach ( $filterModel as $field => $model ) {
 			$family = $familyOf( $field );
 			$prop = $propertyOf !== null ? $propertyOf( $field ) : $field;
-			$desc = $this->columnDescription( $prop, $model, $family );
+			/** @var Description|null $desc */
+			$desc = $this->walkColumn( $prop, $model, $family );
 			if ( $desc !== null ) {
 				$parts[] = $desc;
 			}
@@ -289,81 +282,36 @@ class FilterTranslator {
 	}
 
 	// -------------------------------------------------------------------------
-	// Per-column dispatcher
+	// Leaf hooks (the base owns the set/combined/simple dispatch and combined descent)
 	// -------------------------------------------------------------------------
 
 	/**
-	 * Translate a single column's filter model to a Description.
+	 * @inheritDoc
 	 *
-	 * Handles both simple conditions and combined { operator, conditions } shapes.
+	 * Dispatch a simple condition by family. Text and boolean both go through the text
+	 * builder (SMW has no distinct boolean filter); number and date have their own.
 	 *
-	 * @param string $property Resolved SMW property name (not the AG Grid field).
-	 * @param array<string,mixed> $model
-	 * @param string $family
-	 * @return Description|null
-	 */
-	private function columnDescription( string $property, array $model, string $family ): ?Description {
-		// Set filter: detected by presence of 'values' key
-		if ( isset( $model['values'] ) ) {
-			return $this->setDescription( $property, $model );
-		}
-
-		// Combined filter: has 'operator' and 'conditions'
-		if ( isset( $model['operator'] ) && isset( $model['conditions'] ) ) {
-			return $this->combinedDescription( $property, $model, $family );
-		}
-
-		// Simple filter
-		return $this->simpleConditionDescription( $property, $model, $family );
-	}
-
-	/**
-	 * Translate a combined { operator, conditions } filter model.
-	 *
-	 * @param string $property Resolved SMW property name (not the AG Grid field).
-	 * @param array<string,mixed> $model
-	 * @param string $family
-	 * @return Description|null
-	 */
-	private function combinedDescription( string $property, array $model, string $family ): ?Description {
-		$parts = [];
-		foreach ( $model['conditions'] as $condition ) {
-			$desc = $this->simpleConditionDescription( $property, $condition, $family );
-			if ( $desc !== null ) {
-				$parts[] = $desc;
-			}
-		}
-		if ( count( $parts ) === 0 ) {
-			return null;
-		}
-		if ( count( $parts ) === 1 ) {
-			return $parts[0];
-		}
-		if ( $model['operator'] === 'OR' ) {
-			return new Disjunction( $parts );
-		}
-		return new Conjunction( $parts );
-	}
-
-	/**
-	 * Dispatch a simple condition (no operator/conditions nesting) by family.
-	 *
-	 * @param string $property Resolved SMW property name (not the AG Grid field).
+	 * @param string $col Resolved SMW property name (not the AG Grid field).
 	 * @param array<string,mixed> $condition
-	 * @param string $family
-	 * @return Description|null
 	 */
-	private function simpleConditionDescription(
-		string $property,
-		array $condition,
-		string $family
-	): ?Description {
+	protected function emitSimple( string $col, array $condition, string $family ): ?Description {
 		return match ( $family ) {
-			'text', 'boolean' => $this->textDescription( $property, $condition ),
-			'number' => $this->numberDescription( $property, $condition ),
-			'date' => $this->dateDescription( $property, $condition ),
+			'text', 'boolean' => $this->textDescription( $col, $condition ),
+			'number' => $this->numberDescription( $col, $condition ),
+			'date' => $this->dateDescription( $col, $condition ),
 			default => null,
 		};
+	}
+
+	/**
+	 * @inheritDoc
+	 *
+	 * SMW groups with a Disjunction (OR) or Conjunction (AND).
+	 *
+	 * @param Description[] $parts
+	 */
+	protected function combine( string $operator, array $parts ): Description {
+		return $operator === 'OR' ? new Disjunction( $parts ) : new Conjunction( $parts );
 	}
 
 	// -------------------------------------------------------------------------
@@ -444,7 +392,7 @@ class FilterTranslator {
 			return null;
 		}
 
-		$comparator = $this->numericComparator( $type );
+		$comparator = $this->comparator( $type );
 		if ( $comparator === null || $rawValue === null ) {
 			return null;
 		}
@@ -486,7 +434,7 @@ class FilterTranslator {
 			return null;
 		}
 
-		$comparator = $this->dateComparator( $type );
+		$comparator = $this->comparator( $type );
 		if ( $comparator === null || $dateFrom === null ) {
 			return null;
 		}
@@ -509,17 +457,17 @@ class FilterTranslator {
 	 * The client sends whichever side (selected vs. unselected) is smaller to stay
 	 * within SMW's query-size limit.
 	 *
-	 * @param string $propertyName Resolved SMW property name (not the AG Grid field).
+	 * @inheritDoc
+	 * @param string $col Resolved SMW property name (not the AG Grid field).
 	 * @param array<string,mixed> $model
-	 * @return Description|null
 	 */
-	private function setDescription( string $propertyName, array $model ): ?Description {
+	protected function emitSet( string $col, array $model ): ?Description {
 		$values = $model['values'] ?? [];
 		if ( count( $values ) === 0 ) {
 			return null;
 		}
 
-		$property = DIProperty::newFromUserLabel( $propertyName );
+		$property = DIProperty::newFromUserLabel( $col );
 
 		if ( !empty( $model['exclude'] ) ) {
 			$parts = [];
@@ -598,38 +546,22 @@ class FilterTranslator {
 	}
 
 	/**
-	 * Map AG Grid number filter type string to an SMW comparator constant.
+	 * Map an AG Grid number/date filter type string to an SMW comparator constant via the
+	 * shared {@see FilterOperator} table (one table for both number and date). Null for a
+	 * type with no comparison operator.
 	 *
 	 * @param string $type
-	 * @return int|null SMW_CMP_* constant, or null for unknown types.
+	 * @return int|null SMW_CMP_* constant, or null.
 	 */
-	private function numericComparator( string $type ): ?int {
-		return match ( $type ) {
-			'equals' => SMW_CMP_EQ,
-			'notEqual' => SMW_CMP_NEQ,
-			'greaterThan' => SMW_CMP_GRTR,
-			'greaterThanOrEqual' => SMW_CMP_GEQ,
-			'lessThan' => SMW_CMP_LESS,
-			'lessThanOrEqual' => SMW_CMP_LEQ,
-			default => null,
-		};
-	}
-
-	/**
-	 * Map AG Grid date filter type string to an SMW comparator constant.
-	 *
-	 * @param string $type
-	 * @return int|null SMW_CMP_* constant, or null for unknown types.
-	 */
-	private function dateComparator( string $type ): ?int {
-		return match ( $type ) {
-			'equals' => SMW_CMP_EQ,
-			'notEqual' => SMW_CMP_NEQ,
-			'greaterThan' => SMW_CMP_GRTR,
-			'greaterThanOrEqual' => SMW_CMP_GEQ,
-			'lessThan' => SMW_CMP_LESS,
-			'lessThanOrEqual' => SMW_CMP_LEQ,
-			default => null,
+	private function comparator( string $type ): ?int {
+		return match ( $this->operatorFor( $type ) ) {
+			FilterOperator::Equals => SMW_CMP_EQ,
+			FilterOperator::NotEqual => SMW_CMP_NEQ,
+			FilterOperator::GreaterThan => SMW_CMP_GRTR,
+			FilterOperator::GreaterThanOrEqual => SMW_CMP_GEQ,
+			FilterOperator::LessThan => SMW_CMP_LESS,
+			FilterOperator::LessThanOrEqual => SMW_CMP_LEQ,
+			null => null,
 		};
 	}
 }
