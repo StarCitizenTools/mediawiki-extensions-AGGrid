@@ -1,37 +1,60 @@
 # AGGrid
 
-Build sortable, filterable [AG Grid](https://www.ag-grid.com/) data tables on wiki pages, straight from Lua. Put clickable links and thumbnails inside cells, and page through large datasets.
-
-You write a standard AG Grid `gridOptions` table in Lua and call one function. The extension renders a lightweight placeholder, then hydrates it in the browser with the bundled AG Grid Community library. Grids load lazily as they scroll into view.
+Build sortable, filterable [AG Grid](https://www.ag-grid.com/) data tables on wiki pages,
+straight from Lua. Put clickable links and thumbnails inside cells, page through large datasets,
+and query rows from [Semantic MediaWiki](https://www.semantic-mediawiki.org/) or
+[Bucket](https://www.mediawiki.org/wiki/Extension:Bucket).
 
 ## ✨ Highlights
 
-- Author full AG Grid `gridOptions` in Lua; existing AG Grid knowledge carries straight over.
-- Clickable wikilinks, thumbnails, linked thumbnails, and link lists inside cells.
-- Sort, filter (including a built-in **set filter**), quick-search, and CSV export all work on the underlying values.
-- Declarative number/date formatting that keeps the underlying value sortable.
-- Extensible from JavaScript: register custom column types, renderers, and filters, or tap the grid API after mount.
-- Lazy-loads, and on saved pages serves rows from a cacheable REST endpoint.
+- **Interactive tables on wiki pages** — readers sort, filter, search, and page through the data
+  in place, instead of scrolling a static wikitable.
+- **Scales to large datasets** — page through thousands of rows, or query them on the server so
+  the page stays light.
+- **Shows your structured data** — turn [Semantic MediaWiki](https://www.semantic-mediawiki.org/)
+  or [Bucket](https://www.mediawiki.org/wiki/Extension:Bucket) data into a live table, sorted,
+  filtered, and paged on the server.
+- **Rich cells** — clickable page links and thumbnails inside cells, resolved server-side.
+- **Authored in Lua** — define grids in a Scribunto module; no hand-built HTML or JavaScript.
+- **Fits your wiki** — matches the active skin's light/dark colours automatically, and extends
+  from JavaScript when you need a custom renderer or filter.
 
 ## 📋 Requirements
 
 - MediaWiki 1.43 or later
-- [Scribunto](https://www.mediawiki.org/wiki/Extension:Scribunto) (required)
+- [Scribunto](https://www.mediawiki.org/wiki/Extension:Scribunto)
 
 ## 📦 Installation
 
-Drop the extension in `extensions/AGGrid` and load it from `LocalSettings.php`:
+1. Drop the extension in `extensions/AGGrid` and load it from `LocalSettings.php`:
 
-```php
-wfLoadExtension( 'AGGrid' );
-```
+   ```php
+   wfLoadExtension( 'AGGrid' );
+   ```
+
+2. Run the database updater to create the extension's tables (`aggrid_data`, `aggrid_source`):
+
+   ```sh
+   php maintenance/run.php update
+   ```
+
+   Grids will not render until these tables exist.
+
+## ⚙️ Configuration
+
+All settings are optional.
+
+| Setting | Default | Description |
+| --- | --- | --- |
+| `$wgAGGridBackendCacheMaxAge` | `120` | Max-age (seconds) for backend-source grid REST responses (the row pages and column values). |
+| `$wgAGGridBucketMaxValues` | `1000` | Maximum rows scanned when listing a Bucket column's set-filter values; the list is marked partial when reached. |
 
 ## 🚀 Quick start
 
 Pass a `gridOptions` table to `render`:
 
 ```lua
-mw.ext.aggrid.render( {
+mw.ext.aggrid.render{
     columnDefs = {
         { field = 'name', headerName = 'Name' },
         { field = 'price', headerName = 'Price', filter = 'agNumberColumnFilter' },
@@ -41,156 +64,32 @@ mw.ext.aggrid.render( {
         { name = 'Mustang', price = 30 },
     },
     pagination = true,
-} )
-```
-
-`gridOptions` mirrors AG Grid's [`gridOptions`](https://www.ag-grid.com/javascript-data-grid/grid-options/) object one to one, so anything JSON-serialisable from their docs works here. `columnDefs` and `rowData` are required.
-
-One limit to know up front: function options such as `cellRenderer` and `comparator` can't cross into JSON. For links and thumbnails, reach for the rich-cell helpers below.
-
-## 🔗 Links, thumbnails, and other rich cells
-
-To show a clickable link or a thumbnail in a cell, you can't pass an AG Grid renderer function from Lua. Instead, AGGrid ships ready-made **column types**: build a structured cell value with a helper, then tag the column with its matching helper.
-
-```lua
-local aggrid = require( 'mw.ext.aggrid' )
-
-local p = {}
-function p.ships()
-    return aggrid.render{
-        columnDefs = {
-            aggrid.imageColumn{ field = 'pic', header = 'Image' },
-            aggrid.linkColumn{ field = 'name', header = 'Name' },
-            aggrid.linkListColumn{ field = 'variants', header = 'Variants' },
-            { field = 'price', headerName = 'Price', filter = 'agNumberColumnFilter' },
-        },
-        rowData = {
-            {
-                pic = aggrid.thumb( 'File:Aurora.jpg', 120, { link = 'Aurora MR' } ),
-                name = aggrid.link( 'Aurora MR' ),
-                variants = aggrid.linkList{ 'Aurora LN', 'Aurora CL' },
-                price = 110,
-            },
-        },
-    }
-end
-return p
-```
-
-What makes this safe and fast:
-
-- **Links and thumbnails resolve on the server**, during the page parse, so the browser never makes extra requests to render a cell.
-- **Linking is a modifier, not a separate type.** Any cell value can carry an `href`, and the renderer wraps it in a link. That is how a thumbnail becomes a *linked* thumbnail: `aggrid.thumb( file, width, { link = ... } )`.
-- **Sorting and filtering use the text, not the markup.** Sort, filter, quick-search, and CSV export read each cell's underlying text (link text, alt text, joined list text), while the cell shows the rich content.
-- **Output is escaped by default.** Renderers build DOM with `textContent` and typed properties, never `innerHTML`, and only allow `http(s):`, root-relative, `./`, and `#` link targets.
-
-## 🔽 Set filter
-
-AG Grid Community has no built-in set filter (the checkbox list of a column's values), so AGGrid ships one. Enable it per column with `filter = 'aggridSet'`:
-
-```lua
-mw.ext.aggrid.render{
-    columnDefs = {
-        aggrid.linkColumn{ field = 'name', header = 'Name', filter = 'aggridSet' },
-        { field = 'type', headerName = 'Type', filter = 'aggridSet' },
-        { field = 'price', headerName = 'Price', filter = 'agNumberColumnFilter' },
-    },
-    rowData = rows,
 }
 ```
 
-The popup lists each unique value with a row count, a search box for long lists, a tri-state "select all", and a `(Blanks)` entry for empty cells. On rich columns (`linkColumn`, `imageColumn`, `linkListColumn`) it filters on the displayed text, matching how sort and quick-search behave. The value list is taken from all loaded rows; it is not narrowed by other columns' active filters.
+`gridOptions` mirrors AG Grid's
+[`gridOptions`](https://www.ag-grid.com/javascript-data-grid/grid-options/) object one to one, so
+anything JSON-serialisable from their docs works here. See
+[Authoring grids](docs/authoring-grids.md) for the full picture.
 
-A custom column type can override this from JavaScript: `filterValueGetter` filters on a different facet than the column sorts and searches on, and `filterParams.itemRenderer` draws icons or markup beside each value. On backend (SMW) grids the same idea is declared in Lua instead: set `filterProp` on a printout to list and filter on a different property than the column displays and sorts on. See [`docs/extending-column-types.md`](docs/extending-column-types.md#rich-set-filters-and-the-grid-api).
+## 🔀 Two ways to supply data
 
-## 🔢 Formatting numbers and dates
+- **Inline** — supply `columnDefs` and `rowData` directly, as above. Best for small, hand-written
+  or Lua-generated tables. → [Authoring grids](docs/authoring-grids.md)
+- **Backend source** — supply a `source` descriptor and the rows come from Semantic MediaWiki or
+  Bucket, queried and paged on the server. Best for large or already-stored datasets. →
+  [Backend source grids](docs/data-sources.md)
 
-AG Grid formats values with a `valueFormatter` function, which can't cross from Lua into JSON. Instead, set a serialisable `format` spec on a column. The underlying value stays a number or date, so sort, filter, quick-search, and CSV export keep operating on the real value — only the displayed text changes.
+## 📚 Documentation
 
-```lua
-columnDefs = {
-    { field = 'length', header = 'Length',
-      format = { style = 'number', useGrouping = true, decimals = 0, suffix = ' m' } },
-    { field = 'released', header = 'Released',
-      format = { style = 'date', dateStyle = 'medium' } },
-}
--- 1234567 shows as "1,234,567 m" and still sorts numerically
-```
-
-- **`style = 'number'`** — `useGrouping` (thousands separators, default `true`), `decimals` (fixed fraction digits), `prefix`, `suffix`, `locale`.
-- **`style = 'date'`** — `dateStyle` (`'short'`, `'medium'`, `'long'`, `'full'`) or a full `options` table of [`Intl.DateTimeFormat`](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Intl/DateTimeFormat) options, plus `locale`. Input is parsed as ISO-8601 (e.g. `2024-03-09`); other strings pass through unchanged.
-
-When `locale` is omitted the viewer's own locale is used, so grouping and date wording follow the reader while a fixed `prefix`/`suffix` stays literal. Non-numeric or empty values pass through untouched. `format` works the same on inline and Semantic MediaWiki source grids.
-
-> On a Semantic MediaWiki **Quantity** column the value already arrives formatted with its unit (e.g. `"27 kg"`), so a `format` spec there is a no-op — it only takes effect where the source value is a bare number.
-
-## 📖 Lua API (`mw.ext.aggrid`)
-
-### Render
-
-| Function | Returns | Description |
-| --- | --- | --- |
-| `render( gridOptions )` | wikitext | Renders a grid. `columnDefs` and `rowData` are required. |
-
-### Build cell values
-
-| Function | Returns | Description |
-| --- | --- | --- |
-| `link( target, text? )` | `{ text, href }` or `nil` | A wikilink to page `target`. `text` defaults to the title's display text. Returns `nil` if the title can't be parsed. |
-| `thumb( file, width, opts? )` | `{ src, width, alt, href? }` or `nil` | A thumbnail of `file` (a `File:` title) at `width` px. `opts.link` makes it a linked thumbnail; `opts.alt` overrides the alt text (default: the file's page title). Returns `nil` if the file is missing. |
-| `linkList( targets )` | `{ links = { … } }` | A comma-separated row of wikilinks from a list of page titles. Unparseable titles are skipped. |
-
-### Tag columns
-
-Each helper returns a `colDef` with the right renderer `type` already set, and lets you use the shorter `header` key in place of AG Grid's `headerName`. Any other `colDef` keys pass straight through. `type` is managed by the helper, so setting it yourself has no effect.
-
-| Function | Column type | Pairs with |
-| --- | --- | --- |
-| `linkColumn( spec )` | `aggridLink` | `link()` values |
-| `imageColumn( spec )` | `aggridImage` | `thumb()` values |
-| `linkListColumn( spec )` | `aggridLinkList` | `linkList()` values |
-
-Prefer to write it by hand? Set the type directly: `{ field = 'name', type = 'aggridLink' }`.
-
-## 🎨 Theming
-
-Grids pick up the wiki's colours from the active skin. The AG Grid theme maps to MediaWiki's Codex design tokens, so on skins that expose those tokens, light, dark, and OS colour schemes (and skin colour overrides) flow through the CSS cascade with no configuration. On skins that don't provide Codex tokens, the grid falls back to a readable light theme. Either way, override it by setting `gridOptions.theme`.
-
-## 🧩 Add your own cell types
-
-Core ships only the cell types that need **server-side resolution** — links and thumbnails. Anything that is purely about *rendering* (badges, custom layouts, icons) or any custom **filter** or **editor** lives in JavaScript. Register it before grids mount — from another extension, a skin, or a site script (`MediaWiki:Common.js`) — then reference it from Lua by name.
-
-The `ext.aggrid.register` hook hands you a **registry** with AG Grid's two native maps:
-
-- **`columnTypes`** — colDef bundles, referenced from Lua by `type`.
-- **`components`** — named renderers, filters, and editors, referenced by `cellRenderer` / `filter` / `cellEditor`.
-
-```javascript
-mw.hook( 'ext.aggrid.register' ).add( ( reg ) => {
-    // A column type: a renderer plus its sort/filter scalar, used via type='status'
-    reg.columnTypes.status = {
-        cellRenderer: ( params ) => {
-            const span = document.createElement( 'span' );
-            span.textContent = ( params.value && params.value.label ) || '';
-            return span;
-        },
-        valueFormatter: ( p ) => ( p.value && p.value.label ) || ''
-    };
-    // A component: a named renderer / filter / editor, used via filter='myFilter' etc.
-    // reg.components.myFilter = MyFilterComponent; // define it first — see the guide below
-    // reg.withLink wraps a renderer's output in a scheme-checked link.
-} );
-```
-
-Build DOM safely: use `textContent` and typed properties, never `innerHTML` on cell values. Always return a plain scalar from `valueFormatter` so sort, filter, and export keep working — and define `getQuickFilterText` alongside it for object values, since quick search reads that instead.
-
-Want a global search box? Set `quickSearch = true` (or `quickSearch = { placeholder = 'Find ships…', debounceMs = 300 }`) in your gridOptions and the extension renders a themed, localised quick-search box above the rows. On inline grids it filters the loaded rows; on Semantic MediaWiki **source** grids the term is sent to the server, which matches it across the page name and the text and page columns as a substring (number and date columns match exactly), so paging and totals reflect the whole result set, not just the current page. Every whitespace-separated word must match somewhere, mirroring AG Grid's own quick filter. On source grids, matching follows the database's `LIKE` case sensitivity — case-insensitive on MySQL/MariaDB, case-sensitive on SQLite. Need a handle to the grid itself? The `ext.aggrid.gridReady` hook fires after each grid mounts with AG Grid's `GridApi`, the placeholder element, and the resolved `gridOptions` — wire external filters or drive the grid programmatically.
-
-For copy-pasteable recipes — a coloured status **badge** (renderer + CSS), a composite "entity card" column that filters on a different facet than it sorts on, set-filter icons, and the `gridReady` hook — see [`docs/extending-column-types.md`](docs/extending-column-types.md).
-
-## 📏 Limits
-
-Inline `rowData` is capped at 5,000 rows. For larger datasets, use a structured-data backend. On saved pages, rows are served from a cacheable REST endpoint rather than inlined into the page HTML.
+| Guide | What it covers |
+| --- | --- |
+| [Authoring grids](docs/authoring-grids.md) | The inline `gridOptions` model, the no-functions limit, pagination, theming, limits |
+| [Rich cells](docs/rich-cells.md) | Links, thumbnails, linked thumbnails, and link lists |
+| [Formatting](docs/formatting.md) | `format` specs for numbers and dates |
+| [Filters](docs/filters.md) | The `aggridSet` set filter and the quick-search box |
+| [Backend source grids](docs/data-sources.md) | Querying rows from Semantic MediaWiki and Bucket |
+| [Extending with JavaScript](docs/extending-column-types.md) | Custom column types, renderers, filters, and the grid API |
 
 ## 🔎 See also
 

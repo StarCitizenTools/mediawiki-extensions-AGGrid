@@ -3,11 +3,11 @@
 This guide shows you how to add your own column types and components to AGGrid from
 JavaScript, with a complete worked example at the end.
 
-Core ships only the cell types that need **server-side resolution** — links and
-thumbnails, where MediaWiki must turn a page title or `File:` into a URL before the value
-crosses into the browser. Anything that is purely about **rendering** — coloured badges,
-custom layouts, icons, progress bars — lives in JavaScript on your wiki, registered through
-a hook. Core stays small; you get unlimited rendering freedom.
+You register custom rendering in JavaScript on your wiki, through a hook — coloured badges,
+custom layouts, icons, progress bars, anything purely visual. Core ships only the cell types
+that need **server-side resolution**: links and thumbnails, where MediaWiki must turn a page
+title or `File:` into a URL before the value crosses into the browser. The split keeps core
+small and gives you unlimited rendering freedom.
 
 ## The hook
 
@@ -29,13 +29,13 @@ mw.hook( 'ext.aggrid.register' ).add( ( reg ) => {
 ```
 
 Register from anything that loads before grids mount — a sister extension, a skin, a
-gadget, or `MediaWiki:Common.js`. Your entries are **peers of the built-ins**: reference a
+gadget, or `MediaWiki:Common.js`. Your entries are **peers of the built-ins**. Reference a
 column type from Lua by name (`type = 'myType'`, like `aggridLink`) and a component by name
 (`filter = 'myFilter'`, like the built-in `aggridSet`).
 
 ### Which registry do I use?
 
-Both are AG Grid's own registries. Pick by what the cell needs:
+Pick by what the cell needs — both are AG Grid's own registries:
 
 - **[`columnTypes`](https://www.ag-grid.com/javascript-data-grid/column-definitions/#default-column-definitions)**
   bundles colDef properties — a `cellRenderer` plus its sort/filter
@@ -79,7 +79,7 @@ mw.hook( 'ext.aggrid.register' ).add( ( reg ) => {
 
 From Lua: `{ field = 'count', filter = 'evenOnly' }`.
 
-### Rules for a safe, well-behaved renderer
+### Write a safe, well-behaved renderer
 
 - **Build DOM, never `innerHTML`.** Use `document.createElement` + `textContent` and typed
   properties. Cell values are author data; treating them as HTML is an XSS hole.
@@ -186,7 +186,7 @@ from data you don't format per cell:
   } }
 ```
 
-**Backend (Semantic MediaWiki) grids** — set the same `type` and `cellRendererParams` on a
+**Backend source (Semantic MediaWiki) grids** — set the same `type` and `cellRendererParams` on a
 printout, and AGGrid carries them onto the generated column. The cell value is the plain SMW
 value, resolved to a variant by the map:
 
@@ -247,7 +247,7 @@ Two boundaries, by design:
 - **Function form only.** AG Grid also accepts a string expression (`'data.manufacturer'`), but
   AGGrid doesn't evaluate expressions — a string is ignored and the column falls back to its
   display scalar. The getter reaches the colDef through this hook anyway, so write a function.
-- **Backend (SMW) grids declare the facet in Lua instead.** On a Semantic MediaWiki source
+- **Backend source (Semantic MediaWiki) grids declare the facet in Lua instead.** On a Semantic MediaWiki source
   grid the value list comes from the server and filtering happens in the SMW query, so a JS
   getter has nothing to influence. Set `filterProp` on the printout entry instead — the
   server lists and filters on that property while the column keeps displaying and sorting
@@ -296,7 +296,7 @@ Semantic MediaWiki, and error paths alike), handing you the live AG Grid
 [`GridApi`](https://www.ag-grid.com/javascript-data-grid/grid-api/) plus the placeholder
 element and the resolved `gridOptions`.
 
-For a global quick-search box you normally don't need the hook at all — set the
+For a global quick-search box you usually don't need the hook — set the
 `quickSearch` gridOption in Lua and the extension renders a built-in, localised one.
 If your gadget wires its own search UI, skip grids that already have the built-in box
 (it is in the DOM by the time the hook fires; note the `gridOptions` handed to the
@@ -376,6 +376,14 @@ mw.ext.aggrid.render{
 ```
 
 The grid sorts on the ship name, while the set filter lists `Origin` and `RSI` with your
-brand markup — no extension code specific to your wiki. Because of the `filterValueGetter`,
-quick search matches the manufacturer facet; add a `getQuickFilterText` returning
-`p.data.name` to the type if you want it on the name instead.
+brand markup — no wiki-specific extension code required. Because of the `filterValueGetter`,
+quick search matches the manufacturer facet; to match the name instead, add a
+`getQuickFilterText` returning `p.data.name` to the type.
+
+## See also
+
+- [Authoring grids](authoring-grids.md) — the inline `gridOptions` model and the no-functions limit
+- [Rich cells](rich-cells.md) — the built-in `link`/`thumb`/`linkList` types this builds on
+- [Filters](filters.md) — the `aggridSet` set filter that `filterValueGetter` and `itemRenderer` extend
+- [Backend source grids](data-sources.md) — and `filterProp`, the SMW equivalent of `filterValueGetter`
+- [README](../README.md) — installation and configuration

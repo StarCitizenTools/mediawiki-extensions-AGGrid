@@ -130,7 +130,7 @@
 	"config": {
 		"AGGridBackendCacheMaxAge": {
 			"value": 120,
-			"description": "Max-age (seconds) for backend-source grid REST responses (cursor pages and column values)."
+			"description": "Max-age (seconds) for backend-source grid REST responses (row pages and column values)."
 		},
 		"AGGridBucketMaxValues": {
 			"value": 1000,
