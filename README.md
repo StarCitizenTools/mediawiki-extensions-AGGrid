@@ -46,7 +46,7 @@ All settings are optional.
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `$wgAGGridBackendCacheMaxAge` | `120` | Max-age (seconds) for backend-source grid REST responses (the row pages and column values). |
+| `$wgAGGridBackendCacheMaxAge` | `600` | Max-age (seconds) for backend-source grid REST responses (the row pages and column values). Higher cuts backend load but is a hard staleness ceiling — there's no purge when the underlying data changes. |
 | `$wgAGGridBucketMaxValues` | `1000` | Maximum rows scanned when listing a Bucket column's set-filter values; the list is marked partial when reached. |
 
 ## 🚀 Quick start
