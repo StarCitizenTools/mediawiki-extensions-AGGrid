@@ -114,21 +114,29 @@ class SmwSourceCompilerTest extends MediaWikiIntegrationTestCase {
 
 	public function testEmptyQueryThrows(): void {
 		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage(
+			'mw.ext.aggrid.render: source.query must be a non-empty string or list of fragments'
+		);
 		$this->compiler->compile( [ 'query' => '   ', 'printouts' => [ 'A' ] ] );
 	}
 
 	public function testNoPrintoutsThrows(): void {
 		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage(
+			'mw.ext.aggrid.render: source.printouts must list at least one property'
+		);
 		$this->compiler->compile( [ 'query' => '[[Category:City]]', 'printouts' => [] ] );
 	}
 
 	public function testPrintoutWithoutPropertyNameThrows(): void {
 		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage( 'mw.ext.aggrid.render: each printout needs a property name' );
 		$this->compiler->compile( [ 'query' => '[[Category:City]]', 'printouts' => [ [ 'label' => 'Pop' ] ] ] );
 	}
 
 	public function testInvalidPropertyThrows(): void {
 		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage( 'mw.ext.aggrid.render: invalid property "_"' );
 		$this->compiler->compile( [ 'query' => '[[Category:City]]', 'printouts' => [ '_' ] ] );
 	}
 }
