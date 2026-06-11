@@ -4,9 +4,7 @@ declare( strict_types=1 );
 
 namespace MediaWiki\Extension\AGGrid\DataSource\Smw;
 
-use MediaWiki\Extension\AGGrid\DataSource\BackendDataSource;
-use MediaWiki\Extension\AGGrid\DataSource\CachePolicy;
-use MediaWiki\Extension\AGGrid\DataSource\GridPage;
+use MediaWiki\Extension\AGGrid\DataSource\AbstractBackendDataSource;
 use MediaWiki\Extension\AGGrid\Service\SourceSpecStore;
 use RuntimeException;
 use SMW\DataValues\URIValue;
@@ -36,7 +34,7 @@ use SMWDataValue as DataValue;
  * render AG Grid's native pagination bar. Deep-page offsets are bounded by SMW's
  * configured query upper bound.
  */
-class SmwDataSource implements BackendDataSource {
+class SmwDataSource extends AbstractBackendDataSource {
 
 	/** Reserved row key carrying the subject (page) link cell. */
 	private const SUBJECT_KEY = '_subject';
@@ -49,35 +47,48 @@ class SmwDataSource implements BackendDataSource {
 	 * filters are built from a controlled column model, so that rationale does not
 	 * apply — but a set filter excluding many page-property values expands into one
 	 * subquery per value, each costing size and depth, and trips the defaults. Raise
-	 * both for our query only (see runQuery()).
+	 * both for our query only (see withRaisedLimits()).
 	 */
 	private const QUERY_MAX_SIZE = 5000;
 	private const QUERY_MAX_DEPTH = 100;
 
 	public function __construct(
 		private readonly Store $store,
-		private readonly SourceSpecStore $specStore,
+		SourceSpecStore $specStore,
 		private readonly FilterTranslator $filterTranslator,
 		private readonly TypeColumnMapper $typeColumnMapper,
-		private readonly int $cacheMaxAge,
-		private readonly int $maxValues
+		int $cacheMaxAge,
+		int $maxValues
 	) {
+		parent::__construct( $specStore, $cacheMaxAge, $maxValues );
+	}
+
+	/** @inheritDoc */
+	protected function specSentinelKey(): string {
+		return 'query';
+	}
+
+	/** @inheritDoc */
+	protected function backendName(): string {
+		return 'SMW';
 	}
 
 	/**
 	 * @inheritDoc
+	 *
+	 * Materialises the rows eagerly inside withRaisedLimits(): the structural-limit
+	 * raise must span setDescription() (which prunes against the globals), so the whole
+	 * query lifecycle — including draining the result — happens within that scope. mapRow
+	 * runs afterward in the base and only reads already-fetched values.
 	 */
-	public function getPage(
-		int $pageId,
-		int $gridIndex,
+	protected function executeQuery(
+		array $spec,
 		int $offset,
+		int $size,
 		array $sortModel,
 		array $filterModel,
-		int $size,
-		string $quickSearch = ''
-	): GridPage {
-		$spec = $this->resolveSpec( $pageId, $gridIndex );
-
+		string $quickSearch
+	): iterable {
 		// Two resolver views over the declared columns: sorting follows the column's
 		// display property; filtering follows its facet when one is declared. Both
 		// are closed — an undeclared field throws (-> 400 in the REST handlers).
@@ -86,14 +97,14 @@ class SmwDataSource implements BackendDataSource {
 
 		return $this->withRaisedLimits( function () use (
 			$spec, $displayOf, $filterOf, $offset, $size, $sortModel, $filterModel, $quickSearch
-		): GridPage {
+		): array {
 			$query = $this->buildQuery( $spec, $spec['printouts'] ?? [] );
 			$query->setOffset( $offset );
 			$query->setLimit( $size );
 			$query->setSortKeys( $this->filterTranslator->toSortKeys( $sortModel, $displayOf ) );
 
 			// Column filters and the free-text quick search are independent conditions
-			// ANDed onto the base query (and onto the count query below, identically).
+			// ANDed onto the base query (and onto the count query, identically).
 			$conditions = array_filter( [
 				$this->buildFilterDescription( $filterModel, $filterOf ),
 				$this->buildQuickSearchDescription( $spec, $quickSearch, $displayOf ),
@@ -110,35 +121,67 @@ class SmwDataSource implements BackendDataSource {
 			$rows = [];
 			$resultRow = $result->getNext();
 			while ( $resultRow !== false ) {
-				$rows[] = $this->mapRow( $resultRow );
+				$rows[] = $resultRow;
 				$resultRow = $result->getNext();
 			}
+			return $rows;
+		} );
+	}
 
-			$total = $this->countFor( $spec, $filterModel, $quickSearch );
+	/**
+	 * @inheritDoc
+	 *
+	 * SMW serves a total only in MODE_COUNT, where its QueryEngine emits a
+	 * COUNT(DISTINCT …) and exposes it via QueryResult::getCountValue(). The count is
+	 * bounded by the query's limit, so we raise it to SMW's configured maximum
+	 * (smwgQMaxLimit/smwgQMaxInlineLimit) to report a realistic total. Wrapped in its own
+	 * withRaisedLimits() so its setDescription() prune sees the raised structural limits.
+	 */
+	protected function countTotal( array $spec, array $filterModel, string $quickSearch ): int {
+		return $this->withRaisedLimits( function () use ( $spec, $filterModel, $quickSearch ): int {
+			$countQuery = $this->buildQuery( $spec, [] );
 
-			return new GridPage( $rows, $total );
+			// Mirror executeQuery exactly: AND the same column-filter and quick-search
+			// conditions so the reported total matches the rows actually returned.
+			$conditions = array_filter( [
+				$this->buildFilterDescription( $filterModel, $this->filterPropertyResolver( $spec ) ),
+				$this->buildQuickSearchDescription( $spec, $quickSearch, $this->displayPropertyResolver( $spec ) ),
+			] );
+			if ( $conditions !== [] ) {
+				$countQuery->setDescription(
+					new Conjunction( array_merge( [ $countQuery->getDescription() ], $conditions ) )
+				);
+			}
+
+			$maxLimit = (int)( $GLOBALS['smwgQMaxLimit'] ?? 10000 );
+			$maxInlineLimit = (int)( $GLOBALS['smwgQMaxInlineLimit'] ?? 5000 );
+			$countQuery->setLimit( max( 1, min( $maxLimit, $maxInlineLimit ) ) );
+			$countQuery->setQueryMode( Query::MODE_COUNT );
+
+			$result = $this->store->getQueryResult( $countQuery );
+			$this->assertNoErrors( $result );
+
+			return (int)$result->getCountValue();
 		} );
 	}
 
 	/**
 	 * @inheritDoc
 	 */
-	public function getColumnValues( int $pageId, int $gridIndex, string $column ): array {
-		$spec = $this->resolveSpec( $pageId, $gridIndex );
-
-		// $column is the AG Grid field; filtering resolves through the facet when one
-		// is declared, so the value list enumerates the same property the filter
-		// conditions will run against. Undeclared columns throw (-> 400).
+	protected function fetchColumnValueRows( array $spec, string $column, int $maxValues ): array {
+		// $column is the AG Grid field; filtering resolves through the facet when one is
+		// declared, so the value list enumerates the same property the filter conditions
+		// will run against. Undeclared columns throw (-> 400).
 		$prop = $this->filterPropertyResolver( $spec )( $column );
 
-		return $this->withRaisedLimits( function () use ( $spec, $prop ): array {
+		return $this->withRaisedLimits( function () use ( $spec, $prop, $maxValues ): array {
 			$query = $this->buildQuery( $spec, [ $prop ] );
-			$query->setLimit( $this->maxValues );
+			$query->setLimit( $maxValues );
 
 			$result = $this->store->getQueryResult( $query );
 			$this->assertNoErrors( $result );
 
-			$values = [];
+			$entries = [];
 			$rowCount = 0;
 			$resultRow = $result->getNext();
 			while ( $resultRow !== false ) {
@@ -152,74 +195,19 @@ class SmwDataSource implements BackendDataSource {
 						if ( $label === '' ) {
 							continue;
 						}
-						$values[$label] = [ 'key' => $label, 'label' => $label ];
+						$entries[] = [ 'key' => $label, 'label' => $label ];
 					}
 				}
 				$resultRow = $result->getNext();
 			}
 
-			return [
-				'values' => array_values( $values ),
-				'partial' => $rowCount >= $this->maxValues,
-			];
+			return [ 'entries' => $entries, 'rowCount' => $rowCount ];
 		} );
-	}
-
-	/**
-	 * @inheritDoc
-	 */
-	public function getCachePolicy(): CachePolicy {
-		// The PUBLIC flag is decided by the REST handler from anon-readability;
-		// the source only supplies the configured maxAge default.
-		return new CachePolicy( false, $this->cacheMaxAge );
 	}
 
 	// -------------------------------------------------------------------------
 	// Internals
 	// -------------------------------------------------------------------------
-
-	/**
-	 * Run a count-mode query for the total number of rows matching the spec query
-	 * plus the active filter, independent of the current page's offset/limit/sort.
-	 *
-	 * SMW serves a total only in MODE_COUNT, where its QueryEngine emits a
-	 * COUNT(DISTINCT …) and exposes it via QueryResult::getCountValue(). The count
-	 * is bounded by the query's limit, so we raise it to SMW's configured maximum
-	 * (smwgQMaxLimit/smwgQMaxInlineLimit) to report a realistic total.
-	 *
-	 * Called only from within getPage()'s withRaisedLimits() scope, so its
-	 * setDescription() prune sees the raised structural limits.
-	 *
-	 * @phpcs:ignore Generic.Files.LineLength
-	 * @param array{query: string, printouts?: string[], mainlabel?: ?string, fields?: array<string,string>, facets?: array<string,string>} $spec
-	 * @param array<string, array<string,mixed>> $filterModel
-	 * @param string $quickSearch
-	 */
-	private function countFor( array $spec, array $filterModel, string $quickSearch ): int {
-		$countQuery = $this->buildQuery( $spec, [] );
-
-		// Mirror getPage exactly: AND the same column-filter and quick-search
-		// conditions so the reported total matches the rows actually returned.
-		$conditions = array_filter( [
-			$this->buildFilterDescription( $filterModel, $this->filterPropertyResolver( $spec ) ),
-			$this->buildQuickSearchDescription( $spec, $quickSearch, $this->displayPropertyResolver( $spec ) ),
-		] );
-		if ( $conditions !== [] ) {
-			$countQuery->setDescription(
-				new Conjunction( array_merge( [ $countQuery->getDescription() ], $conditions ) )
-			);
-		}
-
-		$maxLimit = (int)( $GLOBALS['smwgQMaxLimit'] ?? 10000 );
-		$maxInlineLimit = (int)( $GLOBALS['smwgQMaxInlineLimit'] ?? 5000 );
-		$countQuery->setLimit( max( 1, min( $maxLimit, $maxInlineLimit ) ) );
-		$countQuery->setQueryMode( Query::MODE_COUNT );
-
-		$result = $this->store->getQueryResult( $countQuery );
-		$this->assertNoErrors( $result );
-
-		return (int)$result->getCountValue();
-	}
 
 	/**
 	 * Build the filter Description for a filterModel, resolving each field's family
@@ -342,22 +330,6 @@ class SmwDataSource implements BackendDataSource {
 	}
 
 	/**
-	 * Resolve and validate the stored source spec for a grid.
-	 *
-	 * @phpcs:ignore Generic.Files.LineLength
-	 * @return array{query: string, printouts?: string[], mainlabel?: ?string, fields?: array<string,string>, facets?: array<string,string>}
-	 */
-	private function resolveSpec( int $pageId, int $gridIndex ): array {
-		$source = $this->specStore->getSource( $pageId, $gridIndex );
-		if ( $source === null || !isset( $source['spec']['query'] ) ) {
-			throw new RuntimeException(
-				"AGGrid: no SMW source spec for page $pageId grid $gridIndex"
-			);
-		}
-		return $source['spec'];
-	}
-
-	/**
 	 * Build a base Query from the spec query string plus the given printout labels.
 	 *
 	 * @param array{query: string, mainlabel?: ?string} $spec
@@ -385,13 +357,14 @@ class SmwDataSource implements BackendDataSource {
 	/**
 	 * Map one SMW result row (array of ResultArray) into an AG Grid row.
 	 *
-	 * @param array<int, ResultArray> $resultRow
+	 * @param array<int, ResultArray> $rawRow
+	 * @param array $spec Unused; the SMW row carries its own print requests.
 	 * @return array<string, mixed>
 	 */
-	private function mapRow( array $resultRow ): array {
+	protected function mapRow( array $rawRow, array $spec ): array {
 		$row = [];
 
-		foreach ( $resultRow as $resultArray ) {
+		foreach ( $rawRow as $resultArray ) {
 			$printRequest = $resultArray->getPrintRequest();
 
 			if ( $printRequest->getMode() === PrintRequest::PRINT_THIS ) {

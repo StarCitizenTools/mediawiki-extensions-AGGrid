@@ -122,6 +122,10 @@ class BucketSourceCompilerTest extends MediaWikiIntegrationTestCase {
 
 	public function testQualifiedFieldWithoutJoinThrows(): void {
 		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage(
+			'mw.ext.aggrid.render: field "skill.category" references bucket "skill" ' .
+			'which is not the primary bucket or a joined bucket'
+		);
 		$this->compiler->compile( [
 			'bucket' => 'item',
 			'fields' => [ [ 'field' => 'skill.category' ] ],
@@ -146,6 +150,7 @@ class BucketSourceCompilerTest extends MediaWikiIntegrationTestCase {
 
 	public function testBaseWhereInvalidOperatorThrows(): void {
 		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage( 'mw.ext.aggrid.render: invalid where operator "LIKE"' );
 		$this->compiler->compile( [
 			'bucket' => 'item',
 			'fields' => [ 'value' ],
@@ -155,6 +160,7 @@ class BucketSourceCompilerTest extends MediaWikiIntegrationTestCase {
 
 	public function testBaseWhereUnknownFieldThrows(): void {
 		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage( 'mw.ext.aggrid.render: unknown field "nope"' );
 		$this->compiler->compile( [
 			'bucket' => 'item',
 			'fields' => [ 'value' ],
@@ -177,6 +183,9 @@ class BucketSourceCompilerTest extends MediaWikiIntegrationTestCase {
 
 	public function testOrderByMustBeSelectedThrows(): void {
 		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage(
+			'mw.ext.aggrid.render: orderBy field "item_type" must be one of the selected fields'
+		);
 		$this->compiler->compile( [
 			'bucket' => 'item',
 			'fields' => [ 'value' ],
@@ -186,6 +195,7 @@ class BucketSourceCompilerTest extends MediaWikiIntegrationTestCase {
 
 	public function testOrderByInvalidDirectionThrows(): void {
 		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage( 'mw.ext.aggrid.render: orderBy direction must be ASC or DESC' );
 		$this->compiler->compile( [
 			'bucket' => 'item',
 			'fields' => [ 'value' ],
@@ -222,36 +232,45 @@ class BucketSourceCompilerTest extends MediaWikiIntegrationTestCase {
 
 	public function testUnknownBucketThrows(): void {
 		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage( 'mw.ext.aggrid.render: unknown bucket "nope"' );
 		$this->compiler->compile( [ 'bucket' => 'nope', 'fields' => [ 'x' ] ] );
 	}
 
 	public function testEmptyBucketThrows(): void {
 		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage( 'mw.ext.aggrid.render: source.bucket must be a non-empty string' );
 		$this->compiler->compile( [ 'bucket' => '  ', 'fields' => [ 'value' ] ] );
 	}
 
 	public function testNoFieldsThrows(): void {
 		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage( 'mw.ext.aggrid.render: source.fields must list at least one field' );
 		$this->compiler->compile( [ 'bucket' => 'item', 'fields' => [] ] );
 	}
 
 	public function testUnknownFieldThrows(): void {
 		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage( 'mw.ext.aggrid.render: unknown field "nope"' );
 		$this->compiler->compile( [ 'bucket' => 'item', 'fields' => [ 'nope' ] ] );
 	}
 
 	public function testFieldWithoutNameThrows(): void {
 		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage( 'mw.ext.aggrid.render: each field needs a name' );
 		$this->compiler->compile( [ 'bucket' => 'item', 'fields' => [ [ 'label' => 'X' ] ] ] );
 	}
 
 	public function testDuplicateColumnThrows(): void {
 		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage( 'mw.ext.aggrid.render: duplicate column "value"' );
 		$this->compiler->compile( [ 'bucket' => 'item', 'fields' => [ 'value', 'value' ] ] );
 	}
 
 	public function testInvalidJoinThrows(): void {
 		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage(
+			'mw.ext.aggrid.render: each join needs a "bucket" and an "on" pair { field, field }'
+		);
 		$this->compiler->compile( [
 			'bucket' => 'item',
 			'fields' => [ 'value' ],
@@ -268,6 +287,10 @@ class BucketSourceCompilerTest extends MediaWikiIntegrationTestCase {
 		$compiler = new BucketSourceCompiler( $reader, new BucketColumnMapper() );
 
 		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage(
+			'mw.ext.aggrid.render: the Bucket database is not configured ' .
+			'($wgBucketDBuser / $wgBucketDBpassword)'
+		);
 		$compiler->compile( [ 'bucket' => 'item', 'fields' => [ 'value' ] ] );
 	}
 }

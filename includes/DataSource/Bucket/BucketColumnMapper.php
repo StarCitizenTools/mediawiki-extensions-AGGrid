@@ -4,6 +4,8 @@ declare( strict_types=1 );
 
 namespace MediaWiki\Extension\AGGrid\DataSource\Bucket;
 
+use MediaWiki\Extension\AGGrid\DataSource\ColumnDescriptor;
+
 /**
  * Maps a Bucket field type (and its repeated flag) to an AG Grid columnDef and a
  * filter family.
@@ -22,11 +24,7 @@ namespace MediaWiki\Extension\AGGrid\DataSource\Bucket;
 class BucketColumnMapper {
 
 	/**
-	 * Descriptor shape: [ 'type' => string|null, 'filter' => string|false, 'family' => string ]
-	 *
-	 * 'type'   — AG Grid column type string, or null to omit the key entirely.
-	 * 'filter' — AG Grid filter component name, or false to disable filtering.
-	 * 'family' — filter family for use by BucketFilterTranslator ('set'|'number'|'none').
+	 * Per-type {@see ColumnDescriptor} fields, keyed by Bucket value type id.
 	 *
 	 * @var array<string, array{type: string|null, filter: string|false, family: string}>
 	 */
@@ -39,30 +37,27 @@ class BucketColumnMapper {
 	];
 
 	/**
-	 * Fallback descriptor for any unknown Bucket type id.
-	 *
-	 * @var array{type: null, filter: false, family: string}
+	 * Resolve the {@see ColumnDescriptor} for a given Bucket type id and repeated flag.
 	 */
-	private const FALLBACK = [ 'type' => null, 'filter' => false, 'family' => 'none' ];
-
-	/**
-	 * Resolve the descriptor for a given Bucket type id and repeated flag.
-	 *
-	 * @return array{type: string|null, filter: string|false, family: string}
-	 */
-	private function descriptor( string $type, bool $repeated ): array {
-		$desc = self::TYPE_MAP[$type] ?? self::FALLBACK;
-
-		if ( $repeated && $desc['family'] !== 'none' ) {
-			// Repeated fields always use a set filter (see class doc). Page values keep a
-			// link-list renderer; other repeated scalars have no special renderer and are
-			// displayed comma-joined.
-			$desc['filter'] = 'aggridSet';
-			$desc['family'] = 'set';
-			$desc['type'] = $type === 'PAGE' ? 'aggridLinkList' : null;
+	private function descriptor( string $type, bool $repeated ): ColumnDescriptor {
+		$row = self::TYPE_MAP[$type] ?? null;
+		if ( $row === null ) {
+			return ColumnDescriptor::fallback();
 		}
 
-		return $desc;
+		if ( $repeated ) {
+			// Every mapped Bucket type is filterable ('set' or 'number'), so a repeated
+			// field always switches to a set filter (see class doc). Page values keep a
+			// link-list renderer; other repeated scalars have no special renderer and are
+			// displayed comma-joined.
+			return new ColumnDescriptor(
+				$type === 'PAGE' ? 'aggridLinkList' : null,
+				'aggridSet',
+				'set'
+			);
+		}
+
+		return new ColumnDescriptor( $row['type'], $row['filter'], $row['family'] );
 	}
 
 	/**
@@ -76,19 +71,7 @@ class BucketColumnMapper {
 	 * @return array<string, mixed> Partial AG Grid columnDef.
 	 */
 	public function mapColumn( string $field, string $header, string $type, bool $repeated ): array {
-		$desc = $this->descriptor( $type, $repeated );
-
-		$colDef = [
-			'field'      => $field,
-			'headerName' => $header,
-			'filter'     => $desc['filter'],
-		];
-
-		if ( $desc['type'] !== null ) {
-			$colDef['type'] = $desc['type'];
-		}
-
-		return $colDef;
+		return $this->descriptor( $type, $repeated )->toColumnDef( $field, $header );
 	}
 
 	/**
@@ -96,13 +79,13 @@ class BucketColumnMapper {
 	 * datatype does not support filtering.
 	 */
 	public function filterComponent( string $type, bool $repeated ): string|false {
-		return $this->descriptor( $type, $repeated )['filter'];
+		return $this->descriptor( $type, $repeated )->filter;
 	}
 
 	/**
 	 * Classify a Bucket type id into a filter family: 'set' | 'number' | 'none'.
 	 */
 	public function filterFamily( string $type, bool $repeated ): string {
-		return $this->descriptor( $type, $repeated )['family'];
+		return $this->descriptor( $type, $repeated )->family;
 	}
 }

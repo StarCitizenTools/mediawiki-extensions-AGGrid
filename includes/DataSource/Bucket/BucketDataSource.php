@@ -4,9 +4,7 @@ declare( strict_types=1 );
 
 namespace MediaWiki\Extension\AGGrid\DataSource\Bucket;
 
-use MediaWiki\Extension\AGGrid\DataSource\BackendDataSource;
-use MediaWiki\Extension\AGGrid\DataSource\CachePolicy;
-use MediaWiki\Extension\AGGrid\DataSource\GridPage;
+use MediaWiki\Extension\AGGrid\DataSource\AbstractBackendDataSource;
 use MediaWiki\Extension\AGGrid\Service\SourceSpecStore;
 use MediaWiki\Title\Title;
 use RuntimeException;
@@ -27,7 +25,7 @@ use RuntimeException;
  * Bucket has no LIKE operator, so quick search is not supported — the $quickSearch
  * argument is accepted (the BackendDataSource contract) but ignored.
  */
-class BucketDataSource implements BackendDataSource {
+class BucketDataSource extends AbstractBackendDataSource {
 
 	/**
 	 * Upper bound for the count query's LIMIT, mirroring BucketQuery::MAX_LIMIT. The
@@ -44,28 +42,37 @@ class BucketDataSource implements BackendDataSource {
 
 	public function __construct(
 		private readonly BucketRunner $runner,
-		private readonly SourceSpecStore $specStore,
+		SourceSpecStore $specStore,
 		private readonly BucketFilterTranslator $filterTranslator,
 		private readonly BucketColumnMapper $columnMapper,
-		private readonly int $cacheMaxAge,
-		private readonly int $maxValues
+		int $cacheMaxAge,
+		int $maxValues
 	) {
+		parent::__construct( $specStore, $cacheMaxAge, $maxValues );
+	}
+
+	/** @inheritDoc */
+	protected function specSentinelKey(): string {
+		return 'bucket';
+	}
+
+	/** @inheritDoc */
+	protected function backendName(): string {
+		return 'Bucket';
 	}
 
 	/**
 	 * @inheritDoc
 	 */
-	public function getPage(
-		int $pageId,
-		int $gridIndex,
+	protected function executeQuery(
+		array $spec,
 		int $offset,
+		int $size,
 		array $sortModel,
 		array $filterModel,
-		int $size,
-		string $quickSearch = ''
-	): GridPage {
-		$spec = $this->resolveSpec( $pageId, $gridIndex );
-
+		string $quickSearch
+	): iterable {
+		// Bucket has no LIKE operator, so $quickSearch is ignored (see class doc).
 		$selectOf = $this->selectResolver( $spec );
 		$familyOf = $this->familyResolver( $spec );
 
@@ -80,57 +87,49 @@ class BucketDataSource implements BackendDataSource {
 			$data['orderBy'] = $orderBy;
 		}
 
-		$rows = [];
-		foreach ( $this->runner->select( $data ) as $resultRow ) {
-			$rows[] = $this->mapRow( $resultRow, $spec );
-		}
-
-		// fetchRowCount() requires a single selected field, so the count query selects
-		// just the primary page_name (non-null) instead of the display columns. The join
-		// and filters stay, so the count matches the rows query.
-		$countData = $this->baseData( $spec, $filterOperands );
-		$countData['selects'] = [ self::COUNT_FIELD ];
-		$countData['limit_arg'] = self::COUNT_LIMIT;
-		$total = $this->runner->count( $countData );
-
-		return new GridPage( $rows, $total );
+		return $this->runner->select( $data );
 	}
 
 	/**
 	 * @inheritDoc
 	 */
-	public function getColumnValues( int $pageId, int $gridIndex, string $column ): array {
-		$spec = $this->resolveSpec( $pageId, $gridIndex );
+	protected function countTotal( array $spec, array $filterModel, string $quickSearch ): int {
+		$selectOf = $this->selectResolver( $spec );
+		$familyOf = $this->familyResolver( $spec );
+		$filterOperands = $this->filterTranslator->toOperands( $filterModel, $selectOf, $familyOf );
+
+		// fetchRowCount() requires a single selected field, so the count query selects
+		// just the primary page_name (non-null) instead of the display columns. The join
+		// and the same filters stay, so the count matches the rows query.
+		$countData = $this->baseData( $spec, $filterOperands );
+		$countData['selects'] = [ self::COUNT_FIELD ];
+		$countData['limit_arg'] = self::COUNT_LIMIT;
+
+		return $this->runner->count( $countData );
+	}
+
+	/**
+	 * @inheritDoc
+	 */
+	protected function fetchColumnValueRows( array $spec, string $column, int $maxValues ): array {
 		$meta = $this->fieldMeta( $spec, $column );
 
 		// Select only this column (plus the spec's joins, so a qualified column resolves),
-		// scan up to maxValues rows, and dedupe in PHP.
+		// scan up to maxValues rows; the base dedupes the entries.
 		$data = $this->baseData( $spec, [] );
 		$data['selects'] = [ $meta['select'] ];
-		$data['limit_arg'] = $this->maxValues;
+		$data['limit_arg'] = $maxValues;
 
-		$values = [];
+		$entries = [];
 		$rowCount = 0;
 		foreach ( $this->runner->select( $data ) as $resultRow ) {
 			$rowCount++;
 			foreach ( $this->valueList( $resultRow[$meta['select']] ?? null, $meta ) as $entry ) {
-				$values[$entry['key']] = $entry;
+				$entries[] = $entry;
 			}
 		}
 
-		return [
-			'values' => array_values( $values ),
-			'partial' => $rowCount >= $this->maxValues,
-		];
-	}
-
-	/**
-	 * @inheritDoc
-	 */
-	public function getCachePolicy(): CachePolicy {
-		// The PUBLIC flag is decided by the REST handler from anon-readability; the
-		// source only supplies the configured maxAge default.
-		return new CachePolicy( false, $this->cacheMaxAge );
+		return [ 'entries' => $entries, 'rowCount' => $rowCount ];
 	}
 
 	// -------------------------------------------------------------------------
@@ -213,23 +212,6 @@ class BucketDataSource implements BackendDataSource {
 	}
 
 	/**
-	 * Resolve and validate the stored Bucket source spec for a grid.
-	 *
-	 * @param int $pageId
-	 * @param int $gridIndex
-	 * @return array
-	 */
-	private function resolveSpec( int $pageId, int $gridIndex ): array {
-		$source = $this->specStore->getSource( $pageId, $gridIndex );
-		if ( $source === null || !isset( $source['spec']['bucket'] ) ) {
-			throw new RuntimeException(
-				"AGGrid: no Bucket source spec for page $pageId grid $gridIndex"
-			);
-		}
-		return $source['spec'];
-	}
-
-	/**
 	 * Field metadata for a declared colId, or throw if undeclared.
 	 *
 	 * @param array $spec
@@ -250,17 +232,17 @@ class BucketDataSource implements BackendDataSource {
 	/**
 	 * Map one Bucket result row (keyed by select string) to an AG Grid row keyed by colId.
 	 *
-	 * @param array<string, mixed> $resultRow
+	 * @param array<string, mixed> $rawRow
 	 * @param array $spec
 	 * @return array<string, mixed>
 	 */
-	private function mapRow( array $resultRow, array $spec ): array {
+	protected function mapRow( array $rawRow, array $spec ): array {
 		$row = [];
 		foreach ( $spec['fields'] as $colId => $meta ) {
-			if ( !array_key_exists( $meta['select'], $resultRow ) ) {
+			if ( !array_key_exists( $meta['select'], $rawRow ) ) {
 				continue;
 			}
-			$cell = $this->cellFor( $resultRow[$meta['select']], $meta['type'], $meta['repeated'] );
+			$cell = $this->cellFor( $rawRow[$meta['select']], $meta['type'], $meta['repeated'] );
 			if ( $cell !== null ) {
 				$row[$colId] = $cell;
 			}

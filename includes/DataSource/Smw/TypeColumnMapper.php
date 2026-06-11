@@ -4,6 +4,8 @@ declare( strict_types=1 );
 
 namespace MediaWiki\Extension\AGGrid\DataSource\Smw;
 
+use MediaWiki\Extension\AGGrid\DataSource\ColumnDescriptor;
+
 /**
  * Maps a Semantic MediaWiki property datatype id to an AG Grid columnDef.
  *
@@ -13,11 +15,7 @@ namespace MediaWiki\Extension\AGGrid\DataSource\Smw;
 class TypeColumnMapper {
 
 	/**
-	 * Descriptor shape: [ 'type' => string|null, 'filter' => string|false, 'family' => string ]
-	 *
-	 * 'type'   — AG Grid column type string, or null to omit the key entirely.
-	 * 'filter' — AG Grid filter component name, or false to disable filtering.
-	 * 'family' — filter family for use by FilterTranslator / SmwDataSource.
+	 * Per-type {@see ColumnDescriptor} fields, keyed by SMW datatype id.
 	 *
 	 * @var array<string, array{type: string|null, filter: string|false, family: string}>
 	 */
@@ -43,13 +41,6 @@ class TypeColumnMapper {
 		// Geographic coordinate — no filter, no special renderer
 		'_geo'  => [ 'type' => null, 'filter' => false, 'family' => 'none' ],
 	];
-
-	/**
-	 * Fallback descriptor used for _rec, any id containing '_rec', and any unknown id.
-	 *
-	 * @var array{type: null, filter: false, family: string}
-	 */
-	private const FALLBACK = [ 'type' => null, 'filter' => false, 'family' => 'none' ];
 
 	/**
 	 * Quick-search kind per searchable SMW type id; ids absent from the map are
@@ -78,17 +69,20 @@ class TypeColumnMapper {
 	];
 
 	/**
-	 * Resolve the descriptor for a given type id.
-	 *
-	 * @return array{type: string|null, filter: string|false, family: string}
+	 * Resolve the {@see ColumnDescriptor} for a given type id.
 	 */
-	private function descriptor( string $typeId ): array {
+	private function descriptor( string $typeId ): ColumnDescriptor {
 		// _rec itself and any compound id that embeds _rec (e.g. _mlt_rec, _ref_rec)
 		if ( str_contains( $typeId, '_rec' ) ) {
-			return self::FALLBACK;
+			return ColumnDescriptor::fallback();
 		}
 
-		return self::TYPE_MAP[$typeId] ?? self::FALLBACK;
+		$row = self::TYPE_MAP[$typeId] ?? null;
+		if ( $row === null ) {
+			return ColumnDescriptor::fallback();
+		}
+
+		return new ColumnDescriptor( $row['type'], $row['filter'], $row['family'] );
 	}
 
 	/**
@@ -100,19 +94,7 @@ class TypeColumnMapper {
 	 * @return array<string, mixed> Partial AG Grid columnDef.
 	 */
 	public function mapColumn( string $field, string $header, string $typeId ): array {
-		$desc = $this->descriptor( $typeId );
-
-		$colDef = [
-			'field'      => $field,
-			'headerName' => $header,
-			'filter'     => $desc['filter'],
-		];
-
-		if ( $desc['type'] !== null ) {
-			$colDef['type'] = $desc['type'];
-		}
-
-		return $colDef;
+		return $this->descriptor( $typeId )->toColumnDef( $field, $header );
 	}
 
 	/**
@@ -122,7 +104,7 @@ class TypeColumnMapper {
 	 * does not support filtering.
 	 */
 	public function filterComponent( string $typeId ): string|false {
-		return $this->descriptor( $typeId )['filter'];
+		return $this->descriptor( $typeId )->filter;
 	}
 
 	/**
@@ -134,7 +116,7 @@ class TypeColumnMapper {
 	 * @return string Filter family name.
 	 */
 	public function filterFamily( string $typeId ): string {
-		return $this->descriptor( $typeId )['family'];
+		return $this->descriptor( $typeId )->family;
 	}
 
 	/**

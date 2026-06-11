@@ -5,6 +5,7 @@ declare( strict_types=1 );
 namespace MediaWiki\Extension\AGGrid\DataSource\Bucket;
 
 use MediaWiki\Config\ConfigException;
+use MediaWiki\Extension\AGGrid\DataSource\SourceCompilerSupport;
 use MediaWiki\Extension\Scribunto\Engines\LuaCommon\LuaError;
 
 /**
@@ -21,6 +22,8 @@ use MediaWiki\Extension\Scribunto\Engines\LuaCommon\LuaError;
  * names, so this never collides.
  */
 class BucketSourceCompiler {
+
+	use SourceCompilerSupport;
 
 	/** Bucket's allowed comparison operators (mirrors BucketQuery's Operator allowlist). */
 	private const WHERE_OPS = [ '=' => true, '!=' => true, '>=' => true, '<=' => true, '>' => true, '<' => true ];
@@ -78,7 +81,7 @@ class BucketSourceCompiler {
 	 */
 	private function parseBucket( $bucket ): string {
 		if ( !is_string( $bucket ) || trim( $bucket ) === '' ) {
-			throw new LuaError( 'mw.ext.aggrid.render: source.bucket must be a non-empty string' );
+			$this->fail( 'source.bucket must be a non-empty string' );
 		}
 		return trim( $bucket );
 	}
@@ -96,13 +99,12 @@ class BucketSourceCompiler {
 		} catch ( ConfigException ) {
 			// Bucket is loaded but its DB account is unconfigured. Surface a clear author
 			// error at parse time rather than letting the exception become a 500.
-			throw new LuaError(
-				'mw.ext.aggrid.render: the Bucket database is not configured ' .
-				'($wgBucketDBuser / $wgBucketDBpassword)'
+			$this->fail(
+				'the Bucket database is not configured ($wgBucketDBuser / $wgBucketDBpassword)'
 			);
 		}
 		if ( $fields === [] ) {
-			throw new LuaError( 'mw.ext.aggrid.render: unknown bucket "' . $bucket . '"' );
+			$this->fail( 'unknown bucket "' . $bucket . '"' );
 		}
 		return $fields;
 	}
@@ -119,21 +121,21 @@ class BucketSourceCompiler {
 			return [];
 		}
 		if ( !is_array( $joins ) ) {
-			throw new LuaError( 'mw.ext.aggrid.render: source.join must be a list of joins' );
+			$this->fail( 'source.join must be a list of joins' );
 		}
 		$parsed = [];
 		foreach ( $joins as $join ) {
 			if ( !is_array( $join ) || !isset( $join['bucket'] ) || !is_string( $join['bucket'] )
 				|| !isset( $join['on'] ) || !is_array( $join['on'] )
 			) {
-				throw new LuaError(
-					'mw.ext.aggrid.render: each join needs a "bucket" and an "on" pair { field, field }'
+				$this->fail(
+					'each join needs a "bucket" and an "on" pair { field, field }'
 				);
 			}
 			$on = array_values( $join['on'] );
 			if ( count( $on ) !== 2 || !is_string( $on[0] ) || !is_string( $on[1] ) ) {
-				throw new LuaError(
-					'mw.ext.aggrid.render: each join needs a "bucket" and an "on" pair { field, field }'
+				$this->fail(
+					'each join needs a "bucket" and an "on" pair { field, field }'
 				);
 			}
 			$parsed[] = [ 'bucket' => trim( $join['bucket'] ), 'on' => [ $on[0], $on[1] ] ];
@@ -152,7 +154,7 @@ class BucketSourceCompiler {
 	 */
 	private function parseFields( $fields, string $bucket, array $schemas ): array {
 		if ( !is_array( $fields ) || $fields === [] ) {
-			throw new LuaError( 'mw.ext.aggrid.render: source.fields must list at least one field' );
+			$this->fail( 'source.fields must list at least one field' );
 		}
 
 		$columnDefs = [];
@@ -163,7 +165,7 @@ class BucketSourceCompiler {
 			$meta = $this->resolveField( $select, $bucket, $schemas );
 			$colId = $this->colId( $select );
 			if ( isset( $specFields[$colId] ) ) {
-				throw new LuaError( 'mw.ext.aggrid.render: duplicate column "' . $colId . '"' );
+				$this->fail( 'duplicate column "' . $colId . '"' );
 			}
 			$colDef = $this->columnMapper->mapColumn( $colId, $label, $meta['type'], $meta['repeated'] );
 			$columnDefs[] = $this->applyOverrides( $colDef, $opts );
@@ -192,16 +194,8 @@ class BucketSourceCompiler {
 		} elseif ( is_array( $entry ) ) {
 			$select = isset( $entry['field'] ) && is_string( $entry['field'] ) ? trim( $entry['field'] ) : '';
 			$labelOpt = isset( $entry['label'] ) && is_string( $entry['label'] ) ? trim( $entry['label'] ) : '';
-			// Display-only presentation keys, copied only when well-typed (mirrors the SMW path).
-			if ( isset( $entry['type'] ) && is_string( $entry['type'] ) ) {
-				$opts['type'] = $entry['type'];
-			}
-			if ( isset( $entry['cellRendererParams'] ) && is_array( $entry['cellRendererParams'] ) ) {
-				$opts['cellRendererParams'] = $entry['cellRendererParams'];
-			}
-			if ( isset( $entry['format'] ) && is_array( $entry['format'] ) ) {
-				$opts['format'] = $entry['format'];
-			}
+			// Display-only presentation keys (type, cellRendererParams, format).
+			$opts = $this->harvestPresentationOptions( $entry );
 			// filter override: false disables filtering, a string forces a component.
 			if ( array_key_exists( 'filter', $entry )
 				&& ( is_bool( $entry['filter'] ) || is_string( $entry['filter'] ) )
@@ -213,7 +207,7 @@ class BucketSourceCompiler {
 		}
 
 		if ( $select === '' ) {
-			throw new LuaError( 'mw.ext.aggrid.render: each field needs a name' );
+			$this->fail( 'each field needs a name' );
 		}
 		$label = $labelOpt !== '' ? $labelOpt : $this->lastSegment( $select );
 		return [ $select, $label, $opts ];
@@ -237,16 +231,16 @@ class BucketSourceCompiler {
 			$bucket = $parts[0];
 			$field = $parts[1];
 			if ( !isset( $schemas[$bucket] ) ) {
-				throw new LuaError(
-					'mw.ext.aggrid.render: field "' . $select . '" references bucket "' . $bucket .
+				$this->fail(
+					'field "' . $select . '" references bucket "' . $bucket .
 					'" which is not the primary bucket or a joined bucket'
 				);
 			}
 		} else {
-			throw new LuaError( 'mw.ext.aggrid.render: invalid field "' . $select . '"' );
+			$this->fail( 'invalid field "' . $select . '"' );
 		}
 		if ( !isset( $schemas[$bucket][$field] ) ) {
-			throw new LuaError( 'mw.ext.aggrid.render: unknown field "' . $select . '"' );
+			$this->fail( 'unknown field "' . $select . '"' );
 		}
 		return $schemas[$bucket][$field];
 	}
@@ -259,15 +253,8 @@ class BucketSourceCompiler {
 	 * @return array
 	 */
 	private function applyOverrides( array $colDef, array $opts ): array {
-		if ( isset( $opts['type'] ) ) {
-			$colDef['type'] = $opts['type'];
-		}
-		if ( isset( $opts['cellRendererParams'] ) ) {
-			$colDef['cellRendererParams'] = $opts['cellRendererParams'];
-		}
-		if ( isset( $opts['format'] ) ) {
-			$colDef['format'] = $opts['format'];
-		}
+		$colDef = $this->applyPresentationOverrides( $colDef, $opts );
+		// Bucket-only: an explicit filter override (false disables, a string forces a component).
 		if ( array_key_exists( 'filter', $opts ) ) {
 			$colDef['filter'] = $opts['filter'];
 		}
@@ -289,26 +276,24 @@ class BucketSourceCompiler {
 			return [];
 		}
 		if ( !is_array( $where ) ) {
-			throw new LuaError(
-				'mw.ext.aggrid.render: source.where must be a list of { field, operator, value } conditions'
+			$this->fail(
+				'source.where must be a list of { field, operator, value } conditions'
 			);
 		}
 		$parsed = [];
 		foreach ( $where as $cond ) {
 			$c = is_array( $cond ) ? array_values( $cond ) : [];
 			if ( count( $c ) !== 3 || !is_string( $c[0] ) || !is_string( $c[1] ) ) {
-				throw new LuaError(
-					'mw.ext.aggrid.render: each where condition must be { field, operator, value }'
-				);
+				$this->fail( 'each where condition must be { field, operator, value }' );
 			}
 			$field = trim( $c[0] );
 			$op = $c[1];
 			$value = $c[2];
 			if ( !isset( self::WHERE_OPS[$op] ) ) {
-				throw new LuaError( 'mw.ext.aggrid.render: invalid where operator "' . $op . '"' );
+				$this->fail( 'invalid where operator "' . $op . '"' );
 			}
 			if ( !is_scalar( $value ) ) {
-				throw new LuaError( 'mw.ext.aggrid.render: where value must be a string, number or boolean' );
+				$this->fail( 'where value must be a string, number or boolean' );
 			}
 			// Validate the field exists (base where may scope on a non-displayed field).
 			$this->resolveField( $field, $bucket, $schemas );
@@ -331,19 +316,17 @@ class BucketSourceCompiler {
 			return null;
 		}
 		if ( !is_array( $orderBy ) || !isset( $orderBy['field'] ) || !is_string( $orderBy['field'] ) ) {
-			throw new LuaError( 'mw.ext.aggrid.render: source.orderBy must be { field, direction }' );
+			$this->fail( 'source.orderBy must be { field, direction }' );
 		}
 		$field = trim( $orderBy['field'] );
 		if ( !in_array( $field, $selects, true ) ) {
-			throw new LuaError(
-				'mw.ext.aggrid.render: orderBy field "' . $field . '" must be one of the selected fields'
-			);
+			$this->fail( 'orderBy field "' . $field . '" must be one of the selected fields' );
 		}
 		$direction = isset( $orderBy['direction'] ) && is_string( $orderBy['direction'] )
 			? strtoupper( trim( $orderBy['direction'] ) )
 			: 'ASC';
 		if ( $direction !== 'ASC' && $direction !== 'DESC' ) {
-			throw new LuaError( 'mw.ext.aggrid.render: orderBy direction must be ASC or DESC' );
+			$this->fail( 'orderBy direction must be ASC or DESC' );
 		}
 		return [ 'field' => $field, 'direction' => $direction ];
 	}
