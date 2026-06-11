@@ -4,6 +4,7 @@ declare( strict_types=1 );
 
 namespace MediaWiki\Extension\AGGrid\DataSource\Smw;
 
+use MediaWiki\Extension\AGGrid\DataSource\SourceCompilerSupport;
 use MediaWiki\Extension\Scribunto\Engines\LuaCommon\LuaError;
 use RuntimeException;
 use SMW\DIProperty;
@@ -20,6 +21,8 @@ use SMW\DIProperty;
  * (Mirrors {@see \MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketSourceCompiler}.)
  */
 class SmwSourceCompiler {
+
+	use SourceCompilerSupport;
 
 	/**
 	 * Compile an `smw` source descriptor into [ columnDefs, spec ].
@@ -49,32 +52,23 @@ class SmwSourceCompiler {
 			try {
 				$property = DIProperty::newFromUserLabel( $prop );
 			} catch ( RuntimeException ) {
-				throw new LuaError( 'mw.ext.aggrid.render: invalid property "' . $prop . '"' );
+				$this->fail( 'invalid property "' . $prop . '"' );
 			}
 			if ( $property === null ) {
-				throw new LuaError( 'mw.ext.aggrid.render: invalid property "' . $prop . '"' );
+				$this->fail( 'invalid property "' . $prop . '"' );
 			}
 			$typeId = $property->findPropertyValueType();
 			// field MUST equal the column key SmwDataSource emits (the PrintRequest label).
 			$colDef = $mapper->mapColumn( $label, $label, $typeId );
 			// Merge author presentation keys over the datatype-derived colDef. `type`
 			// overrides the derived renderer; cellRendererParams/format are additive.
-			// All are plain serializable data and ride in the placeholder attribute.
-			if ( isset( $options['type'] ) ) {
-				$colDef['type'] = $options['type'];
-			}
-			if ( isset( $options['cellRendererParams'] ) ) {
-				$colDef['cellRendererParams'] = $options['cellRendererParams'];
-			}
-			if ( isset( $options['format'] ) ) {
-				$colDef['format'] = $options['format'];
-			}
+			$colDef = $this->applyPresentationOverrides( $colDef, $options );
 			$facetProperty = $this->resolveFacetProperty( $options['filterProp'] ?? null, $property );
 			if ( $facetProperty !== null ) {
 				$filter = $mapper->filterComponent( $facetProperty->findPropertyValueType() );
 				if ( $filter === false ) {
-					throw new LuaError(
-						'mw.ext.aggrid.render: filter property "' . $options['filterProp'] .
+					$this->fail(
+						'filter property "' . $options['filterProp'] .
 						'" has a datatype that cannot be filtered'
 					);
 				}
@@ -146,9 +140,7 @@ class SmwSourceCompiler {
 		}
 
 		if ( $queryString === '' ) {
-			throw new LuaError(
-				'mw.ext.aggrid.render: source.query must be a non-empty string or list of fragments'
-			);
+			$this->fail( 'source.query must be a non-empty string or list of fragments' );
 		}
 
 		return $queryString;
@@ -171,9 +163,7 @@ class SmwSourceCompiler {
 	 */
 	private function parsePrintouts( $printouts ): array {
 		if ( !is_array( $printouts ) || $printouts === [] ) {
-			throw new LuaError(
-				'mw.ext.aggrid.render: source.printouts must list at least one property'
-			);
+			$this->fail( 'source.printouts must list at least one property' );
 		}
 
 		$parsed = [];
@@ -191,27 +181,16 @@ class SmwSourceCompiler {
 			} elseif ( is_array( $entry ) ) {
 				$prop = isset( $entry['prop'] ) ? trim( (string)$entry['prop'] ) : '';
 				$label = isset( $entry['label'] ) ? trim( (string)$entry['label'] ) : $prop;
-				// Display-only presentation keys, copied only when well-typed. These ride
-				// in the placeholder's gridOptions attribute; they are not part of the
-				// stored query spec (the client interprets them at mount).
-				if ( isset( $entry['type'] ) && is_string( $entry['type'] ) ) {
-					$options['type'] = $entry['type'];
-				}
-				if ( isset( $entry['cellRendererParams'] ) && is_array( $entry['cellRendererParams'] ) ) {
-					$options['cellRendererParams'] = $entry['cellRendererParams'];
-				}
-				if ( isset( $entry['format'] ) && is_array( $entry['format'] ) ) {
-					$options['format'] = $entry['format'];
-				}
+				// Display-only presentation keys (type, cellRendererParams, format); they
+				// ride in the placeholder's gridOptions attribute, not the stored spec.
+				$options = $this->harvestPresentationOptions( $entry );
 				// Filter facet (issue #20): unlike the display-only keys above, this DOES
 				// feed the stored query spec — the server lists and filters on it. Silent
 				// type-gating only degrades presentation for the keys above; a silently
 				// dropped facet would change filtering semantics, so reject it here.
 				if ( isset( $entry['filterProp'] ) ) {
 					if ( !is_string( $entry['filterProp'] ) ) {
-						throw new LuaError(
-							'mw.ext.aggrid.render: filterProp must be a string property name'
-						);
+						$this->fail( 'filterProp must be a string property name' );
 					}
 					$options['filterProp'] = trim( $entry['filterProp'] );
 				}
@@ -221,7 +200,7 @@ class SmwSourceCompiler {
 			}
 
 			if ( $prop === '' ) {
-				throw new LuaError( 'mw.ext.aggrid.render: each printout needs a property name' );
+				$this->fail( 'each printout needs a property name' );
 			}
 			if ( $label === '' ) {
 				$label = $prop;
@@ -252,13 +231,13 @@ class SmwSourceCompiler {
 		try {
 			$property = DIProperty::newFromUserLabel( $facetProp );
 		} catch ( RuntimeException ) {
-			throw new LuaError( 'mw.ext.aggrid.render: invalid filter property "' . $facetProp . '"' );
+			$this->fail( 'invalid filter property "' . $facetProp . '"' );
 		}
 		// Defensive parity with the printout loop: some SMW versions return null on
 		// malformed labels even though the current signature is `self`.
 		// @phan-suppress-next-line PhanImpossibleTypeComparison
 		if ( $property === null ) {
-			throw new LuaError( 'mw.ext.aggrid.render: invalid filter property "' . $facetProp . '"' );
+			$this->fail( 'invalid filter property "' . $facetProp . '"' );
 		}
 		if ( $property->getKey() === $displayProperty->getKey() ) {
 			return null;
@@ -266,7 +245,7 @@ class SmwSourceCompiler {
 		// Label-less predefined properties (e.g. '_SKEY') construct fine but have no
 		// user label; letting one through would store a degenerate '' facet label.
 		if ( $property->getLabel() === '' ) {
-			throw new LuaError( 'mw.ext.aggrid.render: invalid filter property "' . $facetProp . '"' );
+			$this->fail( 'invalid filter property "' . $facetProp . '"' );
 		}
 		return $property;
 	}
