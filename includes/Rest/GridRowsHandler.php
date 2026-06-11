@@ -58,14 +58,16 @@ class GridRowsHandler extends SimpleHandler {
 
 		$response = $this->getResponseFactory()->createJson( [ 'rows' => $rows ] );
 
-		// Inline rows are a pure function of (page, revision): cache hard, but only
-		// publicly when an anonymous reader could fetch this page.
+		// Inline rows are a pure function of (page, revision), and the revision is in the
+		// URL, so the response is genuinely immutable — an edit yields a new rev and a new
+		// URL. Cache for a year (like a content-addressed asset), but only publicly when an
+		// anonymous reader could fetch this page.
 		$anonCanRead = $this->permissionManager->userCan(
 			'read', $this->userFactory->newAnonymous(), $title
 		);
 		$response->setHeader(
 			'Cache-Control',
-			$anonCanRead ? 'public, max-age=86400, immutable' : 'private, max-age=0'
+			$anonCanRead ? 'public, max-age=31536000, immutable' : 'private, max-age=0'
 		);
 		return $response;
 	}
