@@ -47,7 +47,7 @@ class SmwDataSource extends AbstractBackendDataSource {
 	 * filters are built from a controlled column model, so that rationale does not
 	 * apply — but a set filter excluding many page-property values expands into one
 	 * subquery per value, each costing size and depth, and trips the defaults. Raise
-	 * both for our query only (see runQuery()).
+	 * both for our query only (see withRaisedLimits()).
 	 */
 	private const QUERY_MAX_SIZE = 5000;
 	private const QUERY_MAX_DEPTH = 100;
