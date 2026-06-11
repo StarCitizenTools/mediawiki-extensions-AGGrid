@@ -51,8 +51,8 @@ end
 ---                          { bucket = 'skill', on = { 'item.skill_required',
 ---                          'skill.skill_name' } }.
 ---      * where     table|nil  @base scope: a list of { field, operator, value }
----                          conditions ANDed together. Operators: = ~= >= <= > <
----                          (Bucket has no substring match).
+---                          conditions ANDed together. Operators (strings):
+---                          '=' '!=' '>=' '<=' '>' '<' (Bucket has no substring match).
 ---      * orderBy   table|nil  @default sort { field = 'value', direction = 'DESC' };
 ---                          the field must be one of `fields`.
 ---    Bucket columns get a set filter (page/text/boolean) or a number filter
