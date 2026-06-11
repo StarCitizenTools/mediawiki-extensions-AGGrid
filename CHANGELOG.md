@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.3.0](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/compare/v0.2.0...v0.3.0) (2026-06-11)
+
+
+### Features
+
+* Bucket backend data source ([#25](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/issues/25)) ([5872587](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/58725872160ab0463e760972f216545fa10016ee))
+* built-in quick-search box with quickSearch gridOption ([#23](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/issues/23)) ([3906d28](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/3906d28436c1f622c5e69e820abe0eeb36757847))
+* gridReady hook, set-filter filterValueGetter and itemRenderer ([#17](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/issues/17)) ([#18](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/issues/18)) ([fef8101](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/fef810141fa0f6adc9e6d42874f5190cdc9365ae))
+* quick-search box for backend (SMW) grids ([#24](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/issues/24)) ([2b368d6](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/2b368d6a38c184615d5e8c3f64ea5471e91442a8))
+* server-side filter facet with filterProp on backend SMW grids ([#20](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/issues/20)) ([#22](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/issues/22)) ([dfd3ea6](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/dfd3ea670dd1f5c254606996bf434d931d5b48bd))
+
 ## [0.2.0](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/compare/v0.1.0...v0.2.0) (2026-06-08)
 
 
