@@ -29,32 +29,13 @@ final class LinksUpdateHandler implements LinksUpdateCompleteHook {
 			return;
 		}
 
-		// Grids are stored one-per-key (GridRenderer::EXT_DATA_KEY . $index),
-		// contiguous from 0; probe until the first gap.
 		$parserOutput = $linksUpdate->getParserOutput();
-		$grids = [];
-		for ( $index = 0; ; $index++ ) {
-			$grid = $parserOutput->getExtensionData( GridRenderer::EXT_DATA_KEY . $index );
-			if ( $grid === null ) {
-				break;
-			}
-			$grids[$index] = $grid;
-		}
 
-		// Always call (even with no grids) so removing a grid clears stale rows.
-		$this->store->replaceForPage( $pageId, $grids );
+		// Always call (even with no grids) so removing a grid clears stale rows. The
+		// same extraction feeds GridDataPopulator's lazy/maintenance flush.
+		$this->store->replaceForPage( $pageId, GridRenderer::extractInlineGrids( $parserOutput ) );
 
-		// Flush backend query specs (SOURCE_EXT_DATA_KEY . $index) to aggrid_source.
-		$sourceGrids = [];
-		for ( $index = 0; ; $index++ ) {
-			$grid = $parserOutput->getExtensionData( GridRenderer::SOURCE_EXT_DATA_KEY . $index );
-			if ( $grid === null ) {
-				break;
-			}
-			$sourceGrids[$index] = $grid;
-		}
-
-		// Always call (even with no grids) so removing a backend grid clears stale rows.
-		$this->sourceStore->replaceForPage( $pageId, $sourceGrids );
+		// Flush backend query specs to aggrid_source; likewise clears on removal.
+		$this->sourceStore->replaceForPage( $pageId, GridRenderer::extractSourceGrids( $parserOutput ) );
 	}
 }

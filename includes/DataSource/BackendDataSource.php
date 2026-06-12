@@ -24,6 +24,10 @@ interface BackendDataSource {
 	 * @param int $size Maximum number of rows to return.
 	 * @param string $quickSearch Free-text quick-search term, ANDed onto the query and
 	 *   matched across the subject and the searchable columns; '' applies no constraint.
+	 * @param array|null $spec Pre-resolved inner source spec. When provided it is used
+	 *   directly instead of re-reading the store by (pageId, gridIndex) — this lets a
+	 *   caller that just resolved or lazily repopulated the spec (issue #31) serve the
+	 *   request without a redundant, possibly replica-lagged or not-yet-committed re-read.
 	 * @return GridPage Carries the page rows and the total count of all matching rows
 	 *   (across every page) so the client can render its native pagination bar.
 	 */
@@ -34,7 +38,8 @@ interface BackendDataSource {
 		array $sortModel,
 		array $filterModel,
 		int $size,
-		string $quickSearch = ''
+		string $quickSearch = '',
+		?array $spec = null
 	): GridPage;
 
 	/**
@@ -43,11 +48,13 @@ interface BackendDataSource {
 	 * @param int $pageId Wiki page ID that owns the grid.
 	 * @param int $gridIndex Zero-based index of the grid on that page.
 	 * @param string $column Column identifier.
+	 * @param array|null $spec Pre-resolved inner source spec; used directly instead of
+	 *   re-reading the store when provided (see {@see getPage()}).
 	 * @return array Shape: [ 'values' => array, 'partial' => bool ]
 	 *   - values: list of { key: string, label: string } objects
 	 *   - partial: true when the value list was truncated
 	 */
-	public function getColumnValues( int $pageId, int $gridIndex, string $column ): array;
+	public function getColumnValues( int $pageId, int $gridIndex, string $column, ?array $spec = null ): array;
 
 	/**
 	 * Declare the HTTP cache behaviour for responses produced by this source.

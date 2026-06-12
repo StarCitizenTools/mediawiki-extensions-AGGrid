@@ -17,6 +17,7 @@ use MediaWiki\Extension\AGGrid\DataSource\Smw\SmwBackend;
 use MediaWiki\Extension\AGGrid\DataSource\Smw\SmwDataSource;
 use MediaWiki\Extension\AGGrid\DataSource\Smw\SmwSourceCompiler;
 use MediaWiki\Extension\AGGrid\DataSource\Smw\TypeColumnMapper;
+use MediaWiki\Extension\AGGrid\Service\GridDataPopulator;
 use MediaWiki\Extension\AGGrid\Service\GridDataStore;
 use MediaWiki\Extension\AGGrid\Service\GridRenderer;
 use MediaWiki\Extension\AGGrid\Service\InlineDataStore;
@@ -34,6 +35,15 @@ return [
 	},
 	'AGGrid.SourceSpecStore' => static function ( MediaWikiServices $services ): SourceSpecStore {
 		return new SourceSpecStore( $services->getConnectionProvider() );
+	},
+	'AGGrid.GridDataPopulator' => static function ( MediaWikiServices $services ): GridDataPopulator {
+		return new GridDataPopulator(
+			$services->getWikiPageFactory(),
+			$services->getParserOutputAccess(),
+			$services->getService( 'AGGrid.InlineDataStore' ),
+			$services->getService( 'AGGrid.SourceSpecStore' ),
+			$services->getReadOnlyMode()
+		);
 	},
 	'AGGrid.BackendRegistry' => static function ( MediaWikiServices $services ): BackendRegistry {
 		return new BackendRegistry(
