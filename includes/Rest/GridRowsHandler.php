@@ -5,6 +5,7 @@ declare( strict_types=1 );
 namespace MediaWiki\Extension\AGGrid\Rest;
 
 use MediaWiki\Extension\AGGrid\DataSource\DataSource;
+use MediaWiki\Extension\AGGrid\Service\GridDataPopulator;
 use MediaWiki\Permissions\PermissionManager;
 use MediaWiki\Rest\LocalizedHttpException;
 use MediaWiki\Rest\SimpleHandler;
@@ -26,7 +27,8 @@ class GridRowsHandler extends SimpleHandler {
 		private readonly DataSource $dataSource,
 		private readonly PermissionManager $permissionManager,
 		private readonly TitleFactory $titleFactory,
-		private readonly UserFactory $userFactory
+		private readonly UserFactory $userFactory,
+		private readonly GridDataPopulator $populator
 	) {
 	}
 
@@ -49,6 +51,18 @@ class GridRowsHandler extends SimpleHandler {
 		}
 
 		$rows = $this->dataSource->getRows( $pageid, $index );
+		if ( $rows === null ) {
+			// Store miss: a grid added via a transcluded template (no per-page edit)
+			// was never flushed to aggrid_data — see issue #31. Repopulate from the
+			// page's current parse and serve the requested grid in-band; the client
+			// mounts a terminal error overlay on a 404 and does not retry, so this
+			// first request must succeed. array_key_exists (not a truthiness test)
+			// so a real zero-row grid serves [] rather than 404ing.
+			$extracted = $this->populator->populateFromParse( $pageid );
+			if ( $extracted !== null && array_key_exists( $index, $extracted['inline'] ) ) {
+				$rows = $extracted['inline'][$index]['rows'];
+			}
+		}
 		if ( $rows === null ) {
 			throw new LocalizedHttpException(
 				new MessageValue( 'rest-nonexistent-title', [ $title->getPrefixedText() ] ),

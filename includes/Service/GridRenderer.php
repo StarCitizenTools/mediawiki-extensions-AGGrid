@@ -150,4 +150,50 @@ final class GridRenderer {
 			'source' => $source,
 		] );
 	}
+
+	/**
+	 * Collect the inline-grid rows queued on a parse, keyed by grid index.
+	 *
+	 * Each grid's rows are written under EXT_DATA_KEY . $index, contiguous from 0
+	 * (see render()). Shared by LinksUpdateHandler (the edit/links-update flush) and
+	 * GridDataPopulator (the lazy REST cache-miss / maintenance flush) so both read
+	 * the queue identically.
+	 *
+	 * @param ParserOutput $parserOutput
+	 * @return array<int,array{rows: array, hash: string}>
+	 */
+	public static function extractInlineGrids( ParserOutput $parserOutput ): array {
+		return self::probeQueue( $parserOutput, self::EXT_DATA_KEY );
+	}
+
+	/**
+	 * Collect the backend query specs queued on a parse, keyed by grid index
+	 * (probed independently of the inline grids — see SOURCE_EXT_DATA_KEY).
+	 *
+	 * @param ParserOutput $parserOutput
+	 * @return array<int,array{source: string, spec: array, hash: string}>
+	 */
+	public static function extractSourceGrids( ParserOutput $parserOutput ): array {
+		return self::probeQueue( $parserOutput, self::SOURCE_EXT_DATA_KEY );
+	}
+
+	/**
+	 * Probe contiguous per-grid extension-data keys ($prefix . 0, 1, …) until the
+	 * first gap, returning index => queued value.
+	 *
+	 * @param ParserOutput $parserOutput
+	 * @param string $prefix
+	 * @return array<int,array>
+	 */
+	private static function probeQueue( ParserOutput $parserOutput, string $prefix ): array {
+		$grids = [];
+		for ( $index = 0; ; $index++ ) {
+			$grid = $parserOutput->getExtensionData( $prefix . $index );
+			if ( $grid === null ) {
+				break;
+			}
+			$grids[$index] = $grid;
+		}
+		return $grids;
+	}
 }

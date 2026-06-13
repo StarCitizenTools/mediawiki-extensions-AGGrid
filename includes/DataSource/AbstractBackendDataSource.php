@@ -47,9 +47,10 @@ abstract class AbstractBackendDataSource implements BackendDataSource {
 		array $sortModel,
 		array $filterModel,
 		int $size,
-		string $quickSearch = ''
+		string $quickSearch = '',
+		?array $spec = null
 	): GridPage {
-		$spec = $this->resolveSpec( $pageId, $gridIndex );
+		$spec = $this->resolveSpec( $pageId, $gridIndex, $spec );
 
 		$rows = [];
 		foreach ( $this->executeQuery( $spec, $offset, $size, $sortModel, $filterModel, $quickSearch ) as $rawRow ) {
@@ -66,8 +67,8 @@ abstract class AbstractBackendDataSource implements BackendDataSource {
 	/**
 	 * @inheritDoc
 	 */
-	final public function getColumnValues( int $pageId, int $gridIndex, string $column ): array {
-		$spec = $this->resolveSpec( $pageId, $gridIndex );
+	final public function getColumnValues( int $pageId, int $gridIndex, string $column, ?array $spec = null ): array {
+		$spec = $this->resolveSpec( $pageId, $gridIndex, $spec );
 		$result = $this->fetchColumnValueRows( $spec, $column, $this->maxValues );
 
 		$values = [];
@@ -86,20 +87,30 @@ abstract class AbstractBackendDataSource implements BackendDataSource {
 	}
 
 	/**
-	 * Resolve and validate the stored source spec for a grid, returning the inner spec.
+	 * Resolve and validate the source spec for a grid, returning the inner spec.
 	 *
-	 * @throws RuntimeException When no spec is stored for (pageId, gridIndex), or the
-	 *   stored spec lacks the backend's required sentinel key.
+	 * When $resolvedSpec is supplied (the caller already loaded or lazily repopulated it)
+	 * it is validated and used directly; otherwise the stored spec is read by
+	 * (pageId, gridIndex). Passing it lets a self-heal request (issue #31) serve without a
+	 * store re-read that could miss a not-yet-committed or replica-lagged write.
+	 *
+	 * @throws RuntimeException When no spec is available for (pageId, gridIndex), or the
+	 *   spec lacks the backend's required sentinel key.
 	 */
-	protected function resolveSpec( int $pageId, int $gridIndex ): array {
-		$source = $this->specStore->getSource( $pageId, $gridIndex );
-		if ( $source === null || !isset( $source['spec'][ $this->specSentinelKey() ] ) ) {
+	protected function resolveSpec( int $pageId, int $gridIndex, ?array $resolvedSpec = null ): array {
+		if ( $resolvedSpec !== null ) {
+			$spec = $resolvedSpec;
+		} else {
+			$source = $this->specStore->getSource( $pageId, $gridIndex );
+			$spec = $source['spec'] ?? null;
+		}
+		if ( $spec === null || !isset( $spec[ $this->specSentinelKey() ] ) ) {
 			throw new RuntimeException( sprintf(
 				'AGGrid: no %s source spec for page %d grid %d',
 				$this->backendName(), $pageId, $gridIndex
 			) );
 		}
-		return $source['spec'];
+		return $spec;
 	}
 
 	/**

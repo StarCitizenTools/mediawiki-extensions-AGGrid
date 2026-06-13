@@ -10,6 +10,7 @@ use MediaWiki\Extension\AGGrid\DataSource\BackendDataSource;
 use MediaWiki\Extension\AGGrid\DataSource\BackendRegistry;
 use MediaWiki\Extension\AGGrid\DataSource\CachePolicy;
 use MediaWiki\Extension\AGGrid\Rest\GridValuesHandler;
+use MediaWiki\Extension\AGGrid\Service\GridDataPopulator;
 use MediaWiki\Extension\AGGrid\Service\SourceSpecStore;
 use MediaWiki\Permissions\PermissionManager;
 use MediaWiki\Rest\LocalizedHttpException;
@@ -39,12 +40,15 @@ class GridValuesHandlerTest extends MediaWikiIntegrationTestCase {
 	 *   or null to make registry->get() throw InvalidArgumentException.
 	 * @param bool $anonCanRead Value returned by PermissionManager::userCan for the anon user.
 	 * @param bool $titleExists When false, TitleFactory::newFromID returns null.
+	 * @param array|null $populated Value returned by GridDataPopulator::populateFromParse
+	 *   (the store-miss fallback); null means the parse yielded no grid for this page.
 	 */
 	private function newHandler(
 		?array $source,
 		?BackendDataSource $dataSource,
 		bool $anonCanRead = true,
-		bool $titleExists = true
+		bool $titleExists = true,
+		?array $populated = null
 	): GridValuesHandler {
 		$title = $this->createMock( Title::class );
 		$title->method( 'getPrefixedText' )->willReturn( 'AGGridPageFixture' );
@@ -74,12 +78,16 @@ class GridValuesHandlerTest extends MediaWikiIntegrationTestCase {
 			$this->createMock( User::class )
 		);
 
+		$populator = $this->createMock( GridDataPopulator::class );
+		$populator->method( 'populateFromParse' )->willReturn( $populated );
+
 		return new GridValuesHandler(
 			$registry,
 			$specStore,
 			$permissionManager,
 			$titleFactory,
-			$userFactory
+			$userFactory,
+			$populator
 		);
 	}
 
@@ -167,6 +175,31 @@ class GridValuesHandlerTest extends MediaWikiIntegrationTestCase {
 		$this->executeHandler( $handler, $this->request() );
 	}
 
+	public function testStoreMissPopulatesSpecFromParse(): void {
+		// aggrid_source has no spec (store miss), but the page's current parse carries
+		// it — the same self-heal as /page, via the shared BackendHandlerTrait.
+		$handler = $this->newHandler(
+			null,
+			$this->fakeDataSource(),
+			true,
+			true,
+			[
+				'inline' => [],
+				'source' => [
+					0 => [ 'source' => 'smw', 'spec' => [ 'query' => '[[Category:Foo]]' ], 'hash' => 'h0' ],
+				],
+			]
+		);
+		$response = $this->executeHandler( $handler, $this->request() );
+
+		$this->assertSame( 200, $response->getStatusCode() );
+		$body = json_decode( (string)$response->getBody(), true );
+		$this->assertSame(
+			[ [ 'key' => 'A', 'label' => 'A' ], [ 'key' => 'B', 'label' => 'B' ] ],
+			$body['values']
+		);
+	}
+
 	public function testUnknownSourceTypeIs404(): void {
 		$handler = $this->newHandler(
 			[ 'source' => 'bogus', 'spec' => [] ],
@@ -196,6 +229,28 @@ class GridValuesHandlerTest extends MediaWikiIntegrationTestCase {
 		] );
 		$this->expectExceptionCode( 400 );
 		$this->executeHandler( $handler, $requestWithoutColumn );
+	}
+
+	public function testResolvedSpecIsThreadedToGetColumnValues(): void {
+		// Regression guard (mirrors GridPageHandler): on a store miss the handler passes the
+		// populator-resolved spec to getColumnValues so it serves from it, not the store.
+		$spec = [ 'query' => '[[Category:FromParse]]' ];
+		$ds = $this->createMock( BackendDataSource::class );
+		$ds->method( 'getCachePolicy' )->willReturn( new CachePolicy( true, self::CACHE_MAX_AGE ) );
+		$ds->expects( $this->once() )
+			->method( 'getColumnValues' )
+			->with( self::PAGE_ID, 0, 'myCol', $spec )
+			->willReturn( [ 'values' => [], 'partial' => false ] );
+
+		$handler = $this->newHandler(
+			null,
+			$ds,
+			true,
+			true,
+			[ 'inline' => [], 'source' => [ 0 => [ 'source' => 'smw', 'spec' => $spec, 'hash' => 'h' ] ] ]
+		);
+		$response = $this->executeHandler( $handler, $this->request() );
+		$this->assertSame( 200, $response->getStatusCode() );
 	}
 
 	public function testColumnIsPassedToDataSource(): void {

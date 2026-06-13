@@ -5,6 +5,7 @@ declare( strict_types=1 );
 namespace MediaWiki\Extension\AGGrid\Rest;
 
 use MediaWiki\Extension\AGGrid\DataSource\BackendRegistry;
+use MediaWiki\Extension\AGGrid\Service\GridDataPopulator;
 use MediaWiki\Extension\AGGrid\Service\SourceSpecStore;
 use MediaWiki\Permissions\PermissionManager;
 use MediaWiki\Rest\LocalizedHttpException;
@@ -35,7 +36,8 @@ class GridValuesHandler extends SimpleHandler {
 		private readonly SourceSpecStore $specStore,
 		private readonly PermissionManager $permissionManager,
 		private readonly TitleFactory $titleFactory,
-		private readonly UserFactory $userFactory
+		private readonly UserFactory $userFactory,
+		private readonly GridDataPopulator $populator
 	) {
 	}
 
@@ -56,7 +58,9 @@ class GridValuesHandler extends SimpleHandler {
 		$column = (string)$params['column'];
 
 		try {
-			$result = $dataSource->getColumnValues( $pageid, $index, $column );
+			// Pass the resolved spec so the set-filter values are served from it directly
+			// rather than re-reading the store (issue #31 self-heal — see GridPageHandler).
+			$result = $dataSource->getColumnValues( $pageid, $index, $column, $source['spec'] );
 		} catch ( RuntimeException ) {
 			// Do not leak the backend exception message or stack to the client.
 			throw new LocalizedHttpException( new MessageValue( 'rest-bad-request' ), 400 );

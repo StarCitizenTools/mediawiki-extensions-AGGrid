@@ -11,6 +11,7 @@ use MediaWiki\Extension\AGGrid\DataSource\BackendRegistry;
 use MediaWiki\Extension\AGGrid\DataSource\CachePolicy;
 use MediaWiki\Extension\AGGrid\DataSource\GridPage;
 use MediaWiki\Extension\AGGrid\Rest\GridPageHandler;
+use MediaWiki\Extension\AGGrid\Service\GridDataPopulator;
 use MediaWiki\Extension\AGGrid\Service\SourceSpecStore;
 use MediaWiki\Permissions\PermissionManager;
 use MediaWiki\Rest\LocalizedHttpException;
@@ -40,12 +41,15 @@ class GridPageHandlerTest extends MediaWikiIntegrationTestCase {
 	 *   or null to make registry->get() throw InvalidArgumentException.
 	 * @param bool $anonCanRead Value returned by PermissionManager::userCan for the anon user.
 	 * @param bool $titleExists When false, TitleFactory::newFromID returns null.
+	 * @param array|null $populated Value returned by GridDataPopulator::populateFromParse
+	 *   (the store-miss fallback); null means the parse yielded no grid for this page.
 	 */
 	private function newHandler(
 		?array $source,
 		?BackendDataSource $dataSource,
 		bool $anonCanRead = true,
-		bool $titleExists = true
+		bool $titleExists = true,
+		?array $populated = null
 	): GridPageHandler {
 		$title = $this->createMock( Title::class );
 		$title->method( 'getPrefixedText' )->willReturn( 'AGGridPageFixture' );
@@ -75,12 +79,16 @@ class GridPageHandlerTest extends MediaWikiIntegrationTestCase {
 			$this->createMock( User::class )
 		);
 
+		$populator = $this->createMock( GridDataPopulator::class );
+		$populator->method( 'populateFromParse' )->willReturn( $populated );
+
 		return new GridPageHandler(
 			$registry,
 			$specStore,
 			$permissionManager,
 			$titleFactory,
-			$userFactory
+			$userFactory,
+			$populator
 		);
 	}
 
@@ -158,6 +166,65 @@ class GridPageHandlerTest extends MediaWikiIntegrationTestCase {
 		$handler = $this->newHandler( null, $this->fakeDataSource() );
 		$this->expectExceptionCode( 404 );
 		$this->executeHandler( $handler, $this->request() );
+	}
+
+	public function testStoreMissPopulatesSpecFromParse(): void {
+		// aggrid_source has no spec (store miss, e.g. a backend grid added via a
+		// transcluded template), but the page's current parse carries it — issue #31.
+		$handler = $this->newHandler(
+			null,
+			$this->fakeDataSource(),
+			true,
+			true,
+			[
+				'inline' => [],
+				'source' => [
+					0 => [ 'source' => 'smw', 'spec' => [ 'query' => '[[Category:Foo]]' ], 'hash' => 'h0' ],
+				],
+			]
+		);
+		$response = $this->executeHandler( $handler, $this->request() );
+
+		$this->assertSame( 200, $response->getStatusCode() );
+		$body = json_decode( (string)$response->getBody(), true );
+		$this->assertSame( [ [ 'name' => 'Aurora' ] ], $body['rows'] );
+	}
+
+	public function testStoreMissWithNoGridAtIndexIs404(): void {
+		// Store miss and the parse has no grid at the requested index → genuine 404.
+		$handler = $this->newHandler(
+			null,
+			$this->fakeDataSource(),
+			true,
+			true,
+			[ 'inline' => [], 'source' => [] ]
+		);
+		$this->expectExceptionCode( 404 );
+		$this->executeHandler( $handler, $this->request() );
+	}
+
+	public function testResolvedSpecIsThreadedToGetPage(): void {
+		// Regression guard for the backend self-heal: on a store miss the handler must pass
+		// the populator-resolved spec to getPage so the data source serves from it rather
+		// than re-reading the still-deferred store (the 400 the live e2e caught — the other
+		// tests miss it because they don't constrain the spec argument).
+		$spec = [ 'query' => '[[Category:FromParse]]' ];
+		$ds = $this->createMock( BackendDataSource::class );
+		$ds->method( 'getCachePolicy' )->willReturn( new CachePolicy( true, self::CACHE_MAX_AGE ) );
+		$ds->expects( $this->once() )
+			->method( 'getPage' )
+			->with( self::PAGE_ID, 0, 0, [], [], 50, '', $spec )
+			->willReturn( new GridPage( [ [ 'name' => 'Aurora' ] ], 1 ) );
+
+		$handler = $this->newHandler(
+			null,
+			$ds,
+			true,
+			true,
+			[ 'inline' => [], 'source' => [ 0 => [ 'source' => 'smw', 'spec' => $spec, 'hash' => 'h' ] ] ]
+		);
+		$response = $this->executeHandler( $handler, $this->request() );
+		$this->assertSame( 200, $response->getStatusCode() );
 	}
 
 	public function testUnknownSourceTypeIs404(): void {

@@ -5,6 +5,7 @@ declare( strict_types=1 );
 namespace MediaWiki\Extension\AGGrid\Rest;
 
 use MediaWiki\Extension\AGGrid\DataSource\BackendRegistry;
+use MediaWiki\Extension\AGGrid\Service\GridDataPopulator;
 use MediaWiki\Extension\AGGrid\Service\SourceSpecStore;
 use MediaWiki\Permissions\PermissionManager;
 use MediaWiki\Rest\LocalizedHttpException;
@@ -36,7 +37,8 @@ class GridPageHandler extends SimpleHandler {
 		private readonly SourceSpecStore $specStore,
 		private readonly PermissionManager $permissionManager,
 		private readonly TitleFactory $titleFactory,
-		private readonly UserFactory $userFactory
+		private readonly UserFactory $userFactory,
+		private readonly GridDataPopulator $populator
 	) {
 	}
 
@@ -66,8 +68,11 @@ class GridPageHandler extends SimpleHandler {
 		$quickSearch = (string)( $params['q'] ?? '' );
 
 		try {
+			// Pass the resolved spec so the data source serves from it directly rather than
+			// re-reading the store — which, on a lazy-populate self-heal (issue #31), would
+			// miss the still-deferred write.
 			$page = $dataSource->getPage(
-				$pageid, $index, $offset, $sortModel, $filterModel, $size, $quickSearch
+				$pageid, $index, $offset, $sortModel, $filterModel, $size, $quickSearch, $source['spec']
 			);
 		} catch ( RuntimeException ) {
 			// Do not leak the backend exception message or stack to the client.
