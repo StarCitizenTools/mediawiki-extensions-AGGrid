@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/compare/v0.3.0...v0.4.0) (2026-06-16)
+
+
+### Features
+
+* lazily populate grid stores on REST cache-miss ([#31](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/issues/31)) ([#32](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/issues/32)) ([7cd32d6](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/7cd32d6f6c6e2a7fe52def45b77e21ec8789516c))
+
 ## [0.3.0](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/compare/v0.2.0...v0.3.0) (2026-06-11)
 
 
