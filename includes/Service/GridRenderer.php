@@ -72,14 +72,15 @@ final class GridRenderer {
 		while ( $parserOutput->getExtensionData( self::EXT_DATA_KEY . $index ) !== null ) {
 			$index++;
 		}
+		$hash = sha1( (string)json_encode( $rows ) );
 		$parserOutput->setExtensionData( self::EXT_DATA_KEY . $index, [
 			'rows' => $rows,
-			'hash' => sha1( (string)json_encode( $rows ) ),
+			'hash' => $hash,
 		] );
 
 		return $this->buildPlaceholder( $gridOptions, [
 			'pageid' => $pageId,
-			'rev' => $revId,
+			'token' => $hash,
 			'index' => $index,
 		], null );
 	}
@@ -131,14 +132,14 @@ final class GridRenderer {
 
 		return $this->buildPlaceholder( $viewConfig, [
 			'pageid' => $pageId,
-			'rev' => $revId,
+			'token' => $revId,
 			'index' => $index,
 		], $source );
 	}
 
 	/**
 	 * @param array $viewConfig gridOptions for the attribute (rowData omitted when fetched).
-	 * @param array|null $handle [ 'pageid' => int, 'rev' => int, 'index' => int ] or null.
+	 * @param array|null $handle [ 'pageid' => int, 'token' => string, 'index' => int ] or null.
 	 * @param string|null $source Source identifier, or null for inline grids.
 	 * @return string
 	 */

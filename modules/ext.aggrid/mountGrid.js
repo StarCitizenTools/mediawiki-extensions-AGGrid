@@ -34,20 +34,25 @@ function parseConfig( el ) {
 }
 
 /**
- * Read the {pageid, rev, index} fetch handle from the placeholder, or null if
+ * Read the {pageid, token, index} fetch handle from the placeholder, or null if
  * it does not carry a complete handle.
  *
  * @param {HTMLElement} el The .ext-aggrid container.
- * @return {Object|null} { pageid, rev, index } or null.
+ * @return {Object|null} { pageid, token, index } or null.
  */
 function readHandle( el ) {
 	const pageid = el.getAttribute( 'data-mw-aggrid-pageid' );
-	const rev = el.getAttribute( 'data-mw-aggrid-rev' );
+	// The cache token: the rows' content hash for inline grids, the revision id for backend
+	// grids. Falls back to the pre-rename attribute so parser-cached HTML emitted before this
+	// release (carrying data-mw-aggrid-rev) still mounts. TODO: drop the data-mw-aggrid-rev
+	// fallback ~1 week after release (tracked as a follow-up issue).
+	const token = el.getAttribute( 'data-mw-aggrid-token' ) ||
+		el.getAttribute( 'data-mw-aggrid-rev' );
 	const index = el.getAttribute( 'data-mw-aggrid-index' );
-	if ( !pageid || !rev || index === null ) {
+	if ( !pageid || !token || index === null ) {
 		return null;
 	}
-	return { pageid, rev, index };
+	return { pageid, token, index };
 }
 
 /**
@@ -62,7 +67,7 @@ function restPath( el ) {
 	if ( !handle ) {
 		return null;
 	}
-	return `/aggrid/v0/grid/${ handle.pageid }/${ handle.rev }/${ handle.index }/rows`;
+	return `/aggrid/v0/grid/${ handle.pageid }/${ handle.token }/${ handle.index }/rows`;
 }
 
 /**
@@ -260,11 +265,11 @@ function mountBackend( el, gridOptions ) {
 	const handle = readHandle( el );
 	if ( !handle ) {
 		// A backend grid can't render without a stored query (e.g. a preview
-		// placeholder that carries data-mw-aggrid-source but no pageid/rev/index).
+		// placeholder that carries data-mw-aggrid-source but no pageid/token/index).
 		mountError( el, gridOptions );
 		return;
 	}
-	const base = `/aggrid/v0/grid/${ handle.pageid }/${ handle.rev }/${ handle.index }`;
+	const base = `/aggrid/v0/grid/${ handle.pageid }/${ handle.token }/${ handle.index }`;
 	const pageUrl = `${ base }/page`;
 	const valuesUrl = `${ base }/values`;
 

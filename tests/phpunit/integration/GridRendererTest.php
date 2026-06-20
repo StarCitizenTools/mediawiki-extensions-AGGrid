@@ -34,7 +34,6 @@ class GridRendererTest extends MediaWikiIntegrationTestCase {
 		$html = $this->getRenderer()->render( $this->options(), $po, 7, 42, false );
 
 		$this->assertStringContainsString( 'data-mw-aggrid-pageid="7"', $html );
-		$this->assertStringContainsString( 'data-mw-aggrid-rev="42"', $html );
 		$this->assertStringContainsString( 'data-mw-aggrid-index="0"', $html );
 		$this->assertStringNotContainsString( 'Aurora', $html );
 
@@ -47,6 +46,8 @@ class GridRendererTest extends MediaWikiIntegrationTestCase {
 		$this->assertArrayHasKey( 0, $grid['rows'], 'rowData normalized to a list' );
 		$this->assertSame( 'Aurora', $grid['rows'][0]['name'] );
 		$this->assertSame( 40, strlen( $grid['hash'] ), 'sha1 hex hash' );
+		$this->assertStringContainsString( 'data-mw-aggrid-token="' . $grid['hash'] . '"', $html );
+		$this->assertStringNotContainsString( 'data-mw-aggrid-rev', $html );
 	}
 
 	public function testSecondGridGetsNextIndex(): void {
@@ -118,7 +119,7 @@ class GridRendererTest extends MediaWikiIntegrationTestCase {
 
 		// Handle attributes present
 		$this->assertStringContainsString( 'data-mw-aggrid-pageid="7"', $html );
-		$this->assertStringContainsString( 'data-mw-aggrid-rev="42"', $html );
+		$this->assertStringContainsString( 'data-mw-aggrid-token="42"', $html );
 		$this->assertStringContainsString( 'data-mw-aggrid-index="0"', $html );
 
 		// No rowData in the options JSON
@@ -177,7 +178,7 @@ class GridRendererTest extends MediaWikiIntegrationTestCase {
 
 		$this->assertStringContainsString( 'data-mw-aggrid-source="smw"', $html );
 		$this->assertStringNotContainsString( 'data-mw-aggrid-pageid', $html );
-		$this->assertStringNotContainsString( 'data-mw-aggrid-rev', $html );
+		$this->assertStringNotContainsString( 'data-mw-aggrid-token', $html );
 		$this->assertStringNotContainsString( 'data-mw-aggrid-index', $html );
 
 		// Nothing queued
