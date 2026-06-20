@@ -124,10 +124,6 @@ trait BackendHandlerTrait {
 			$response->setHeader( 'Cache-Control', 'private, max-age=0' );
 			return;
 		}
-		$value = 'public, max-age=' . $policy->getMaxAge();
-		if ( $policy->getStaleWhileRevalidate() > 0 ) {
-			$value .= ', stale-while-revalidate=' . $policy->getStaleWhileRevalidate();
-		}
-		$response->setHeader( 'Cache-Control', $value );
+		$response->setHeader( 'Cache-Control', $policy->toPublicCacheControl() );
 	}
 }

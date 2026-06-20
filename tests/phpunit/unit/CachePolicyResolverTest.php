@@ -61,4 +61,20 @@ class CachePolicyResolverTest extends MediaWikiUnitTestCase {
 		$this->assertSame( 600, $p->getMaxAge() );
 		$this->assertSame( 50, $p->getStaleWhileRevalidate() );
 	}
+
+	public function testToPublicCacheControlWithSwr(): void {
+		$this->assertSame(
+			'public, max-age=86400, stale-while-revalidate=604800',
+			( new CachePolicyResolver( [ 'inline' => [ 'maxAge' => 86400, 'staleWhileRevalidate' => 604800 ] ] ) )
+				->forSource( 'inline' )->toPublicCacheControl()
+		);
+	}
+
+	public function testToPublicCacheControlWithoutSwr(): void {
+		$this->assertSame(
+			'public, max-age=600',
+			( new CachePolicyResolver( [ 'default' => [ 'maxAge' => 600 ] ] ) )
+				->forSource( 'default' )->toPublicCacheControl()
+		);
+	}
 }

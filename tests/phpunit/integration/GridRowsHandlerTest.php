@@ -97,6 +97,7 @@ class GridRowsHandlerTest extends MediaWikiIntegrationTestCase {
 	}
 
 	public function testMismatchedTokenServesNoStore(): void {
+		// Store has Aurora and the parse yields nothing, so we serve the stored rows under no-store (never cached).
 		$pageId = $this->seed();
 		$response = $this->executeHandler(
 			$this->newHandler(),
@@ -105,7 +106,10 @@ class GridRowsHandlerTest extends MediaWikiIntegrationTestCase {
 		$this->assertSame( 200, $response->getStatusCode() );
 		$body = json_decode( (string)$response->getBody(), true );
 		$this->assertSame( [ [ 'name' => 'Aurora' ] ], $body['rows'] );
-		$this->assertStringContainsString( 'no-store', $response->getHeaderLine( 'Cache-Control' ) );
+		$cc = $response->getHeaderLine( 'Cache-Control' );
+		$this->assertStringContainsString( 'no-store', $cc );
+		$this->assertStringNotContainsString( 'public', $cc );
+		$this->assertStringNotContainsString( 'max-age', $cc );
 	}
 
 	public function testStaleStoreReDerivesFreshRowsFromParse(): void {

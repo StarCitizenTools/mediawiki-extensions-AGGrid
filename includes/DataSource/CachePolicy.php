@@ -22,4 +22,16 @@ final class CachePolicy {
 	public function getStaleWhileRevalidate(): int {
 		return $this->staleWhileRevalidate;
 	}
+
+	/**
+	 * Render the public Cache-Control value for this policy:
+	 * "public, max-age=N" plus ", stale-while-revalidate=M" when M > 0.
+	 */
+	public function toPublicCacheControl(): string {
+		$value = 'public, max-age=' . $this->maxAge;
+		if ( $this->staleWhileRevalidate > 0 ) {
+			$value .= ', stale-while-revalidate=' . $this->staleWhileRevalidate;
+		}
+		return $value;
+	}
 }

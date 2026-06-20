@@ -36,7 +36,7 @@ class GridRowsHandler extends SimpleHandler {
 
 	/**
 	 * @param int $pageid
-	 * @param string $token Opaque cache token — the rows' content hash (sha1).
+	 * @param string $token The rows' content hash (sha1); compared against the stored/derived hash.
 	 * @param int $index
 	 * @return \MediaWiki\Rest\Response
 	 */
@@ -62,6 +62,7 @@ class GridRowsHandler extends SimpleHandler {
 		// the store directly. Also covers replica lag and pre-deploy HTML carrying an old token.
 		if ( $result === null || $result['hash'] !== $token ) {
 			$extracted = $this->populator->populateFromParse( $pageid );
+			// array_key_exists (not truthiness) so a real zero-row grid serves [] rather than 404ing.
 			if ( $extracted !== null && array_key_exists( $index, $extracted['inline'] ) ) {
 				$result = $extracted['inline'][$index];
 			}
@@ -84,11 +85,7 @@ class GridRowsHandler extends SimpleHandler {
 			// The URL hash equals the served rows' hash: this URL only ever appears in HTML that
 			// materialized exactly these rows, so it is safe to cache at the anon/CDN edge.
 			$policy = $this->cachePolicyResolver->forSource( 'inline' );
-			$value = 'public, max-age=' . $policy->getMaxAge();
-			if ( $policy->getStaleWhileRevalidate() > 0 ) {
-				$value .= ', stale-while-revalidate=' . $policy->getStaleWhileRevalidate();
-			}
-			$response->setHeader( 'Cache-Control', $value );
+			$response->setHeader( 'Cache-Control', $policy->toPublicCacheControl() );
 		} else {
 			// Genuinely stale token (pre-deploy revid URL, or a client on outdated HTML even after
 			// re-deriving the current parse): serve the freshest rows but never cache them, so
