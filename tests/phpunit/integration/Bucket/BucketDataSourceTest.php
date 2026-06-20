@@ -8,6 +8,7 @@ use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketColumnMapper;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketDataSource;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketFilterTranslator;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketRunner;
+use MediaWiki\Extension\AGGrid\DataSource\CachePolicy;
 use MediaWiki\Extension\AGGrid\Service\SourceSpecStore;
 use MediaWiki\Title\Title;
 use MediaWikiIntegrationTestCase;
@@ -85,7 +86,7 @@ class BucketDataSourceTest extends MediaWikiIntegrationTestCase {
 			$specStore,
 			new BucketFilterTranslator(),
 			new BucketColumnMapper(),
-			120,
+			new CachePolicy( 120 ),
 			$maxValues
 		);
 	}
@@ -341,7 +342,7 @@ class BucketDataSourceTest extends MediaWikiIntegrationTestCase {
 		$specStore = $this->createMock( SourceSpecStore::class );
 		$specStore->method( 'getSource' )->willReturn( null );
 		$source = new BucketDataSource(
-			$runner, $specStore, new BucketFilterTranslator(), new BucketColumnMapper(), 120, 50
+			$runner, $specStore, new BucketFilterTranslator(), new BucketColumnMapper(), new CachePolicy( 120 ), 50
 		);
 
 		$this->expectException( RuntimeException::class );

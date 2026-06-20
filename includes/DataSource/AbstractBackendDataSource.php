@@ -23,7 +23,7 @@ abstract class AbstractBackendDataSource implements BackendDataSource {
 
 	public function __construct(
 		protected readonly SourceSpecStore $specStore,
-		protected readonly int $cacheMaxAge,
+		protected readonly CachePolicy $cachePolicy,
 		protected readonly int $maxValues
 	) {
 	}
@@ -32,9 +32,7 @@ abstract class AbstractBackendDataSource implements BackendDataSource {
 	 * @inheritDoc
 	 */
 	final public function getCachePolicy(): CachePolicy {
-		// maxAge comes from the configured per-source policy; the REST handler decides
-		// public vs private from anon-readability.
-		return new CachePolicy( $this->cacheMaxAge );
+		return $this->cachePolicy;
 	}
 
 	/**

@@ -5,6 +5,7 @@ declare( strict_types=1 );
 namespace MediaWiki\Extension\AGGrid\DataSource\Smw;
 
 use MediaWiki\Extension\AGGrid\DataSource\AbstractBackendDataSource;
+use MediaWiki\Extension\AGGrid\DataSource\CachePolicy;
 use MediaWiki\Extension\AGGrid\Service\SourceSpecStore;
 use RuntimeException;
 use SMW\DataValues\URIValue;
@@ -57,10 +58,10 @@ class SmwDataSource extends AbstractBackendDataSource {
 		SourceSpecStore $specStore,
 		private readonly FilterTranslator $filterTranslator,
 		private readonly TypeColumnMapper $typeColumnMapper,
-		int $cacheMaxAge,
+		CachePolicy $cachePolicy,
 		int $maxValues
 	) {
-		parent::__construct( $specStore, $cacheMaxAge, $maxValues );
+		parent::__construct( $specStore, $cachePolicy, $maxValues );
 	}
 
 	/** @inheritDoc */

@@ -120,9 +120,14 @@ trait BackendHandlerTrait {
 		$anonCanRead = $this->permissionManager->userCan(
 			'read', $this->userFactory->newAnonymous(), $title
 		);
-		$response->setHeader(
-			'Cache-Control',
-			$anonCanRead ? 'public, max-age=' . $policy->getMaxAge() : 'private, max-age=0'
-		);
+		if ( !$anonCanRead ) {
+			$response->setHeader( 'Cache-Control', 'private, max-age=0' );
+			return;
+		}
+		$value = 'public, max-age=' . $policy->getMaxAge();
+		if ( $policy->getStaleWhileRevalidate() > 0 ) {
+			$value .= ', stale-while-revalidate=' . $policy->getStaleWhileRevalidate();
+		}
+		$response->setHeader( 'Cache-Control', $value );
 	}
 }

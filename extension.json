@@ -131,10 +131,6 @@
 		}
 	},
 	"config": {
-		"AGGridBackendCacheMaxAge": {
-			"value": 600,
-			"description": "Max-age (seconds) for backend-source grid REST responses (row pages and column values). Higher reduces backend load but is a hard staleness ceiling — there is no cache purge when the underlying data changes."
-		},
 		"AGGridCacheControl": {
 			"value": {
 				"inline": { "maxAge": 86400, "staleWhileRevalidate": 604800 },
