@@ -58,7 +58,7 @@
 	},
 	"RestRoutes": [
 		{
-			"path": "/aggrid/v0/grid/{pageid}/{rev}/{index}/rows",
+			"path": "/aggrid/v0/grid/{pageid}/{token}/{index}/rows",
 			"method": "GET",
 			"class": "MediaWiki\\Extension\\AGGrid\\Rest\\GridRowsHandler",
 			"services": [
@@ -66,7 +66,8 @@
 				"PermissionManager",
 				"TitleFactory",
 				"UserFactory",
-				"AGGrid.GridDataPopulator"
+				"AGGrid.GridDataPopulator",
+				"AGGrid.CachePolicyResolver"
 			]
 		},
 		{

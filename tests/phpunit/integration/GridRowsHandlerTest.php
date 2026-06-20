@@ -59,7 +59,8 @@ class GridRowsHandlerTest extends MediaWikiIntegrationTestCase {
 			$services->getPermissionManager(),
 			$services->getTitleFactory(),
 			$services->getUserFactory(),
-			$populator
+			$populator,
+			$services->getService( 'AGGrid.CachePolicyResolver' )
 		);
 	}
 
@@ -74,21 +75,55 @@ class GridRowsHandlerTest extends MediaWikiIntegrationTestCase {
 		return $pageId;
 	}
 
-	private function request( int $pageId, int $index ): RequestData {
+	private function request( int $pageId, int $index, string $token = '1' ): RequestData {
 		return new RequestData( [
-			'pathParams' => [ 'pageid' => $pageId, 'rev' => 1, 'index' => $index ],
+			'pathParams' => [ 'pageid' => $pageId, 'token' => $token, 'index' => $index ],
 		] );
 	}
 
-	public function testReturnsRowsAndPublicCache(): void {
+	public function testReturnsRowsAndPublicCacheOnHashMatch(): void {
 		$pageId = $this->seed();
-		$response = $this->executeHandler( $this->newHandler(), $this->request( $pageId, 0 ) );
+		$token = sha1( '[{"name":"Aurora"}]' );
+		$response = $this->executeHandler( $this->newHandler(), $this->request( $pageId, 0, $token ) );
 
 		$this->assertSame( 200, $response->getStatusCode() );
 		$body = json_decode( (string)$response->getBody(), true );
 		$this->assertSame( [ [ 'name' => 'Aurora' ] ], $body['rows'] );
-		$this->assertStringContainsString( 'public', $response->getHeaderLine( 'Cache-Control' ) );
-		$this->assertStringContainsString( 'immutable', $response->getHeaderLine( 'Cache-Control' ) );
+		$cc = $response->getHeaderLine( 'Cache-Control' );
+		$this->assertStringContainsString( 'public', $cc );
+		$this->assertStringContainsString( 'max-age=86400', $cc );
+		$this->assertStringContainsString( 'stale-while-revalidate=604800', $cc );
+		$this->assertStringNotContainsString( 'immutable', $cc );
+	}
+
+	public function testMismatchedTokenServesNoStore(): void {
+		$pageId = $this->seed();
+		$response = $this->executeHandler(
+			$this->newHandler(),
+			$this->request( $pageId, 0, 'stale-token' )
+		);
+		$this->assertSame( 200, $response->getStatusCode() );
+		$body = json_decode( (string)$response->getBody(), true );
+		$this->assertSame( [ [ 'name' => 'Aurora' ] ], $body['rows'] );
+		$this->assertStringContainsString( 'no-store', $response->getHeaderLine( 'Cache-Control' ) );
+	}
+
+	public function testStaleStoreReDerivesFreshRowsFromParse(): void {
+		// Store has Aurora; URL token is Borealis's hash; the current parse (populator) yields
+		// Borealis. The handler re-derives, the served hash now equals the token → match + cache.
+		$pageId = $this->seed();
+		$borealis = [ [ 'name' => 'Borealis' ] ];
+		$token = sha1( (string)json_encode( $borealis ) );
+		$handler = $this->newHandler( [
+			'inline' => [ 0 => [ 'rows' => $borealis, 'hash' => $token ] ],
+			'source' => [],
+		] );
+		$response = $this->executeHandler( $handler, $this->request( $pageId, 0, $token ) );
+
+		$this->assertSame( 200, $response->getStatusCode() );
+		$body = json_decode( (string)$response->getBody(), true );
+		$this->assertSame( $borealis, $body['rows'] );
+		$this->assertStringContainsString( 'max-age=86400', $response->getHeaderLine( 'Cache-Control' ) );
 	}
 
 	public function testUnknownHandleIs404(): void {

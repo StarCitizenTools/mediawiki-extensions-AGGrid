@@ -4,8 +4,9 @@ declare( strict_types=1 );
 
 namespace MediaWiki\Extension\AGGrid\Rest;
 
-use MediaWiki\Extension\AGGrid\DataSource\DataSource;
+use MediaWiki\Extension\AGGrid\DataSource\CachePolicyResolver;
 use MediaWiki\Extension\AGGrid\Service\GridDataPopulator;
+use MediaWiki\Extension\AGGrid\Service\GridDataStore;
 use MediaWiki\Permissions\PermissionManager;
 use MediaWiki\Rest\LocalizedHttpException;
 use MediaWiki\Rest\SimpleHandler;
@@ -15,30 +16,31 @@ use Wikimedia\Message\MessageValue;
 use Wikimedia\ParamValidator\ParamValidator;
 
 /**
- * GET /aggrid/v0/grid/{pageid}/{rev}/{index}/rows
+ * GET /aggrid/v0/grid/{pageid}/{token}/{index}/rows
  *
- * Serves a stored grid's rows. The {rev} segment pins the cache entry to the
- * page revision (an edit yields a new URL); the stored rows are the current
- * version.
+ * Serves a stored grid's rows. The {token} segment is the content hash (sha1)
+ * of the rows; when rows change the hash changes, yielding a new URL and
+ * invalidating any cached response.
  */
 class GridRowsHandler extends SimpleHandler {
 
 	public function __construct(
-		private readonly DataSource $dataSource,
+		private readonly GridDataStore $store,
 		private readonly PermissionManager $permissionManager,
 		private readonly TitleFactory $titleFactory,
 		private readonly UserFactory $userFactory,
-		private readonly GridDataPopulator $populator
+		private readonly GridDataPopulator $populator,
+		private readonly CachePolicyResolver $cachePolicyResolver
 	) {
 	}
 
 	/**
 	 * @param int $pageid
-	 * @param int $rev
+	 * @param string $token Opaque cache token — the rows' content hash (sha1).
 	 * @param int $index
 	 * @return \MediaWiki\Rest\Response
 	 */
-	public function run( int $pageid, int $rev, int $index ) {
+	public function run( int $pageid, string $token, int $index ) {
 		$title = $this->titleFactory->newFromID( $pageid );
 		if ( !$title ) {
 			throw new LocalizedHttpException( new MessageValue( 'rest-nonexistent-title' ), 404 );
@@ -50,39 +52,49 @@ class GridRowsHandler extends SimpleHandler {
 			);
 		}
 
-		$rows = $this->dataSource->getRows( $pageid, $index );
-		if ( $rows === null ) {
-			// Store miss: a grid added via a transcluded template (no per-page edit)
-			// was never flushed to aggrid_data — see issue #31. Repopulate from the
-			// page's current parse and serve the requested grid in-band; the client
-			// mounts a terminal error overlay on a 404 and does not retry, so this
-			// first request must succeed. array_key_exists (not a truthiness test)
-			// so a real zero-row grid serves [] rather than 404ing.
+		$result = $this->store->getRowsAndHash( $pageid, $index );
+
+		// Re-derive from the CURRENT parse when the store is absent (issue #31) OR stale relative
+		// to the URL token. The stale case is load-bearing for SMW: ParserCachePurgeJob re-parses
+		// the host page to a new hash but never runs LinksUpdateComplete, so aggrid_data is not
+		// rebuilt. populateFromParse reads the current (freshly re-parsed) ParserOutput — fresh
+		// rows + fresh hash — and schedules a deferred aggrid_data rebuild, so later requests match
+		// the store directly. Also covers replica lag and pre-deploy HTML carrying an old token.
+		if ( $result === null || $result['hash'] !== $token ) {
 			$extracted = $this->populator->populateFromParse( $pageid );
 			if ( $extracted !== null && array_key_exists( $index, $extracted['inline'] ) ) {
-				$rows = $extracted['inline'][$index]['rows'];
+				$result = $extracted['inline'][$index];
 			}
 		}
-		if ( $rows === null ) {
+		if ( $result === null ) {
 			throw new LocalizedHttpException(
 				new MessageValue( 'rest-nonexistent-title', [ $title->getPrefixedText() ] ),
 				404
 			);
 		}
 
-		$response = $this->getResponseFactory()->createJson( [ 'rows' => $rows ] );
+		$response = $this->getResponseFactory()->createJson( [ 'rows' => $result['rows'] ] );
 
-		// Inline rows are a pure function of (page, revision), and the revision is in the
-		// URL, so the response is genuinely immutable — an edit yields a new rev and a new
-		// URL. Cache for a year (like a content-addressed asset), but only publicly when an
-		// anonymous reader could fetch this page.
 		$anonCanRead = $this->permissionManager->userCan(
 			'read', $this->userFactory->newAnonymous(), $title
 		);
-		$response->setHeader(
-			'Cache-Control',
-			$anonCanRead ? 'public, max-age=31536000, immutable' : 'private, max-age=0'
-		);
+		if ( !$anonCanRead ) {
+			$response->setHeader( 'Cache-Control', 'private, max-age=0' );
+		} elseif ( $result['hash'] === $token ) {
+			// The URL hash equals the served rows' hash: this URL only ever appears in HTML that
+			// materialized exactly these rows, so it is safe to cache at the anon/CDN edge.
+			$policy = $this->cachePolicyResolver->forSource( 'inline' );
+			$value = 'public, max-age=' . $policy->getMaxAge();
+			if ( $policy->getStaleWhileRevalidate() > 0 ) {
+				$value .= ', stale-while-revalidate=' . $policy->getStaleWhileRevalidate();
+			}
+			$response->setHeader( 'Cache-Control', $value );
+		} else {
+			// Genuinely stale token (pre-deploy revid URL, or a client on outdated HTML even after
+			// re-deriving the current parse): serve the freshest rows but never cache them, so
+			// nothing is frozen and the URL self-upgrades once the client's HTML catches up.
+			$response->setHeader( 'Cache-Control', 'no-store' );
+		}
 		return $response;
 	}
 
@@ -96,9 +108,9 @@ class GridRowsHandler extends SimpleHandler {
 				ParamValidator::PARAM_TYPE => 'integer',
 				ParamValidator::PARAM_REQUIRED => true,
 			],
-			'rev' => [
+			'token' => [
 				self::PARAM_SOURCE => 'path',
-				ParamValidator::PARAM_TYPE => 'integer',
+				ParamValidator::PARAM_TYPE => 'string',
 				ParamValidator::PARAM_REQUIRED => true,
 			],
 			'index' => [
