@@ -367,6 +367,6 @@ class BucketDataSourceTest extends MediaWikiIntegrationTestCase {
 		$source = $this->newDataSource( [] );
 		$policy = $source->getCachePolicy();
 		$this->assertSame( 120, $policy->getMaxAge() );
-		$this->assertFalse( $policy->isPublic() );
+		$this->assertSame( 0, $policy->getStaleWhileRevalidate() );
 	}
 }

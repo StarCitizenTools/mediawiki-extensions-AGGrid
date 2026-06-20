@@ -10,16 +10,16 @@ namespace MediaWiki\Extension\AGGrid\DataSource;
 final class CachePolicy {
 
 	public function __construct(
-		private readonly bool $public,
-		private readonly int $maxAge
+		private readonly int $maxAge,
+		private readonly int $staleWhileRevalidate = 0
 	) {
-	}
-
-	public function isPublic(): bool {
-		return $this->public;
 	}
 
 	public function getMaxAge(): int {
 		return $this->maxAge;
+	}
+
+	public function getStaleWhileRevalidate(): int {
+		return $this->staleWhileRevalidate;
 	}
 }

@@ -32,9 +32,9 @@ abstract class AbstractBackendDataSource implements BackendDataSource {
 	 * @inheritDoc
 	 */
 	final public function getCachePolicy(): CachePolicy {
-		// The PUBLIC flag is decided by the REST handler from anon-readability; the
-		// source only supplies the configured maxAge default.
-		return new CachePolicy( false, $this->cacheMaxAge );
+		// maxAge comes from the configured per-source policy; the REST handler decides
+		// public vs private from anon-readability.
+		return new CachePolicy( $this->cacheMaxAge );
 	}
 
 	/**

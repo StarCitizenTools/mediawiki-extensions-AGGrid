@@ -794,6 +794,6 @@ class SmwDataSourceTest extends MediaWikiIntegrationTestCase {
 		$source = $this->newDataSource( $this->queryResult( [] ) );
 		$policy = $source->getCachePolicy();
 		$this->assertSame( 120, $policy->getMaxAge() );
-		$this->assertFalse( $policy->isPublic() );
+		$this->assertSame( 0, $policy->getStaleWhileRevalidate() );
 	}
 }

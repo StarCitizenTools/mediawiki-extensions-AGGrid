@@ -75,10 +75,10 @@ class AbstractBackendDataSourceTest extends MediaWikiUnitTestCase {
 		};
 	}
 
-	public function testGetCachePolicyIsPrivateWithConfiguredMaxAge(): void {
+	public function testGetCachePolicyUsesConfiguredMaxAge(): void {
 		$policy = $this->newSource( [ 'spec' => [ 'query' => 'X' ] ] )->getCachePolicy();
-		$this->assertFalse( $policy->isPublic() );
 		$this->assertSame( self::CACHE_MAX_AGE, $policy->getMaxAge() );
+		$this->assertSame( 0, $policy->getStaleWhileRevalidate() );
 	}
 
 	public function testGetPageMapsEachRowAndPairsWithTotal(): void {
