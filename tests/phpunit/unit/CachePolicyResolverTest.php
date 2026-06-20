@@ -51,7 +51,8 @@ class CachePolicyResolverTest extends MediaWikiUnitTestCase {
 			'swronly' => [ 'staleWhileRevalidate' => 1200 ],
 		] );
 		$p = $resolver->forSource( 'swronly' );
-		$this->assertSame( 600, $p->getMaxAge(), 'maxAge absent on the matched entry → fallback' );
+		$this->assertSame( 600, $p->getMaxAge(),
+			'maxAge absent on the matched entry → hardcoded DEFAULT_MAX_AGE (not the "default" map entry)' );
 		$this->assertSame( 1200, $p->getStaleWhileRevalidate() );
 	}
 
@@ -60,6 +61,16 @@ class CachePolicyResolverTest extends MediaWikiUnitTestCase {
 		$p = $resolver->forSource( 'anything' );
 		$this->assertSame( 600, $p->getMaxAge() );
 		$this->assertSame( 50, $p->getStaleWhileRevalidate() );
+	}
+
+	public function testNegativeValuesAreFlooredAtZero(): void {
+		$resolver = new CachePolicyResolver( [
+			'inline' => [ 'maxAge' => -5, 'staleWhileRevalidate' => -10 ],
+		] );
+		$p = $resolver->forSource( 'inline' );
+		$this->assertSame( 0, $p->getMaxAge(), 'negative maxAge floored to 0' );
+		$this->assertSame( 0, $p->getStaleWhileRevalidate(), 'negative swr floored to 0' );
+		$this->assertSame( 'public, max-age=0', $p->toPublicCacheControl() );
 	}
 
 	public function testToPublicCacheControlWithSwr(): void {

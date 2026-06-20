@@ -26,9 +26,11 @@ final class CachePolicyResolver {
 
 	public function forSource( string $key ): CachePolicy {
 		$entry = $this->map[$key] ?? $this->map['default'] ?? [];
+		// Floor at 0 so a misconfigured negative value never produces a nonsensical
+		// "max-age=-N" header (a non-array entry degrades through the ?? to the default).
 		return new CachePolicy(
-			(int)( $entry['maxAge'] ?? self::DEFAULT_MAX_AGE ),
-			(int)( $entry['staleWhileRevalidate'] ?? 0 )
+			max( 0, (int)( $entry['maxAge'] ?? self::DEFAULT_MAX_AGE ) ),
+			max( 0, (int)( $entry['staleWhileRevalidate'] ?? 0 ) )
 		);
 	}
 }
