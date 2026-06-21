@@ -103,6 +103,22 @@ function listText( v ) {
 		.filter( ( l ) => l ).map( ( l ) => orEmpty( l.text ) ).join( ', ' );
 }
 
+// The individual filter values of a (possibly multi-value) cell value, blanks dropped:
+// a { links: [...] } list yields each link's text; a plain array yields its elements;
+// anything else yields null (the caller treats it as a single value). The set filter uses
+// this to offer one checkbox per value and pass a row when ANY value is selected.
+function listValues( v ) {
+	let items;
+	if ( v && Array.isArray( v.links ) ) {
+		items = v.links.map( ( l ) => l && l.text );
+	} else if ( Array.isArray( v ) ) {
+		items = v;
+	} else {
+		return null;
+	}
+	return items.filter( ( x ) => x !== undefined && x !== null && x !== '' );
+}
+
 // Build a locale-aware comparator that sorts on a value's derived scalar text.
 function compareBy( extract ) {
 	return ( a, b ) => String( extract( a ) ).localeCompare( String( extract( b ) ) );
@@ -157,6 +173,7 @@ module.exports = {
 	anchorWrap,
 	withLink,
 	buildColumnTypes,
+	listValues,
 	// @internal — exported for tests only. Consume the built-in types via
 	// buildColumnTypes(), which applies the withLink href modifier.
 	COLUMN_TYPES

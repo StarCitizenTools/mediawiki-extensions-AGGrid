@@ -1,5 +1,5 @@
 const {
-	anchorWrap, withLink, buildColumnTypes, COLUMN_TYPES
+	anchorWrap, withLink, buildColumnTypes, COLUMN_TYPES, listValues
 } = require( '../../../modules/ext.aggrid/renderers.js' );
 
 describe( 'anchorWrap', () => {
@@ -125,4 +125,42 @@ describe( 'built-in column types', () => {
 		expect( types.aggridLink.getQuickFilterText( { value: null } ) ).toBe( '' );
 	} );
 
+} );
+
+describe( 'listValues', () => {
+	it( 'returns each link text for a { links } value', () => {
+		expect( listValues( { links: [
+			{ text: 'A' }, { text: 'B', href: '/wiki/B' }
+		] } ) ).toEqual( [ 'A', 'B' ] );
+	} );
+
+	it( 'returns the elements of a plain array', () => {
+		expect( listValues( [ 'A', 'B' ] ) ).toEqual( [ 'A', 'B' ] );
+	} );
+
+	it( 'returns null for scalars, null, and single rich objects', () => {
+		expect( listValues( 'A' ) ).toBeNull();
+		expect( listValues( null ) ).toBeNull();
+		expect( listValues( undefined ) ).toBeNull();
+		expect( listValues( { text: 'A', href: '/x' } ) ).toBeNull();
+	} );
+
+	it( 'drops blank/missing item texts and yields [] for an empty list', () => {
+		expect( listValues( { links: [] } ) ).toEqual( [] );
+		expect( listValues( { links: [ { text: '' }, { text: 'A' }, null ] } ) )
+			.toEqual( [ 'A' ] );
+		expect( listValues( [ 'A', '', null ] ) ).toEqual( [ 'A' ] );
+	} );
+} );
+
+describe( 'aggridLinkList mixed text/link items', () => {
+	it( 'renders a text-only item as a bare text node beside a linked item', () => {
+		const t = buildColumnTypes().aggridLinkList;
+		const el = t.cellRenderer( { value: { links: [
+			{ text: 'Manufacturing' }, { text: 'Mining', href: '/wiki/Mining' }
+		] } } );
+		// One anchor (the linked item); the text-only item is not anchored.
+		expect( el.querySelectorAll( 'a' ).length ).toBe( 1 );
+		expect( el.textContent ).toBe( 'Manufacturing, Mining' );
+	} );
 } );
