@@ -115,7 +115,11 @@ class GridValuesHandlerTest extends MediaWikiIntegrationTestCase {
 
 	private function request( string $column = 'myCol', int $index = 0 ): RequestData {
 		return new RequestData( [
-			'pathParams' => [ 'pageid' => self::PAGE_ID, 'rev' => 1, 'index' => $index ],
+			'pathParams' => [
+				'pageid' => self::PAGE_ID,
+				'token' => 'da39a3ee5e6b4b0d3255bfef95601890afd80709',
+				'index' => $index,
+			],
 			'queryParams' => [ 'column' => $column ],
 		] );
 	}
@@ -224,7 +228,11 @@ class GridValuesHandlerTest extends MediaWikiIntegrationTestCase {
 		$handler = $this->newHandler( $this->smwSpec(), $this->fakeDataSource() );
 		// Omit the required 'column' query parameter — expect a 400-level validation error.
 		$requestWithoutColumn = new RequestData( [
-			'pathParams' => [ 'pageid' => self::PAGE_ID, 'rev' => 1, 'index' => 0 ],
+			'pathParams' => [
+				'pageid' => self::PAGE_ID,
+				'token' => 'da39a3ee5e6b4b0d3255bfef95601890afd80709',
+				'index' => 0,
+			],
 			'queryParams' => [],
 		] );
 		$this->expectExceptionCode( 400 );

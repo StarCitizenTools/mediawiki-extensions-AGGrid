@@ -44,11 +44,11 @@ class GridPageHandler extends SimpleHandler {
 
 	/**
 	 * @param int $pageid Wiki page ID that owns the grid.
-	 * @param int $rev Revision identifier (carried for cache keying; not used for lookup).
+	 * @param string $token Spec-hash cache token (opaque; carried for cache keying, not used for lookup).
 	 * @param int $index Zero-based index of the grid on the page.
 	 * @return Response
 	 */
-	public function run( int $pageid, int $rev, int $index ): Response {
+	public function run( int $pageid, string $token, int $index ): Response {
 		$title = $this->resolveTitleOrThrow( $pageid );
 		$this->assertCanRead( $title );
 
@@ -107,9 +107,9 @@ class GridPageHandler extends SimpleHandler {
 				ParamValidator::PARAM_TYPE => 'integer',
 				ParamValidator::PARAM_REQUIRED => true,
 			],
-			'rev' => [
+			'token' => [
 				self::PARAM_SOURCE => 'path',
-				ParamValidator::PARAM_TYPE => 'integer',
+				ParamValidator::PARAM_TYPE => 'string',
 				ParamValidator::PARAM_REQUIRED => true,
 			],
 			'index' => [

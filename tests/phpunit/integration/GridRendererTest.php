@@ -119,7 +119,10 @@ class GridRendererTest extends MediaWikiIntegrationTestCase {
 
 		// Handle attributes present
 		$this->assertStringContainsString( 'data-mw-aggrid-pageid="7"', $html );
-		$this->assertStringContainsString( 'data-mw-aggrid-token="42"', $html );
+		$this->assertStringContainsString(
+			'data-mw-aggrid-token="' . sha1( (string)json_encode( $spec ) ) . '"',
+			$html
+		);
 		$this->assertStringContainsString( 'data-mw-aggrid-index="0"', $html );
 
 		// No rowData in the options JSON
