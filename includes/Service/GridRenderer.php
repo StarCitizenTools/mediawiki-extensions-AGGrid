@@ -124,15 +124,16 @@ final class GridRenderer {
 		while ( $parserOutput->getExtensionData( self::SOURCE_EXT_DATA_KEY . $index ) !== null ) {
 			$index++;
 		}
+		$hash = sha1( (string)json_encode( $spec ) );
 		$parserOutput->setExtensionData( self::SOURCE_EXT_DATA_KEY . $index, [
 			'source' => $source,
 			'spec' => $spec,
-			'hash' => sha1( (string)json_encode( $spec ) ),
+			'hash' => $hash,
 		] );
 
 		return $this->buildPlaceholder( $viewConfig, [
 			'pageid' => $pageId,
-			'token' => $revId,
+			'token' => $hash,
 			'index' => $index,
 		], $source );
 	}

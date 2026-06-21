@@ -71,7 +71,7 @@
 			]
 		},
 		{
-			"path": "/aggrid/v0/grid/{pageid}/{rev}/{index}/page",
+			"path": "/aggrid/v0/grid/{pageid}/{token}/{index}/page",
 			"method": "GET",
 			"class": "MediaWiki\\Extension\\AGGrid\\Rest\\GridPageHandler",
 			"services": [
@@ -84,7 +84,7 @@
 			]
 		},
 		{
-			"path": "/aggrid/v0/grid/{pageid}/{rev}/{index}/values",
+			"path": "/aggrid/v0/grid/{pageid}/{token}/{index}/values",
 			"method": "GET",
 			"class": "MediaWiki\\Extension\\AGGrid\\Rest\\GridValuesHandler",
 			"services": [

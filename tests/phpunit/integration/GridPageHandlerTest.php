@@ -110,7 +110,11 @@ class GridPageHandlerTest extends MediaWikiIntegrationTestCase {
 
 	private function request( array $query = [], int $index = 0 ): RequestData {
 		return new RequestData( [
-			'pathParams' => [ 'pageid' => self::PAGE_ID, 'rev' => 1, 'index' => $index ],
+			'pathParams' => [
+				'pageid' => self::PAGE_ID,
+				'token' => 'da39a3ee5e6b4b0d3255bfef95601890afd80709',
+				'index' => $index,
+			],
 			'queryParams' => $query,
 		] );
 	}

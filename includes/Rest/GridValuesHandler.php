@@ -21,7 +21,7 @@ use Wikimedia\ParamValidator\ParamValidator;
  * Serves the distinct column values for a backend-source grid column,
  * used to populate the AG Grid server-side Set Filter.
  *
- * Route: GET /aggrid/v0/grid/{pageid}/{rev}/{index}/values?column=<colId>
+ * Route: GET /aggrid/v0/grid/{pageid}/{token}/{index}/values?column=<colId>
  *
  * Response body: { values: [ { key, label }, … ], partial: bool }
  *
@@ -43,11 +43,11 @@ class GridValuesHandler extends SimpleHandler {
 
 	/**
 	 * @param int $pageid Wiki page ID that owns the grid.
-	 * @param int $rev Revision identifier (carried for cache keying; not used for lookup).
+	 * @param string $token Spec-hash cache token (opaque; carried for cache keying, not used for lookup).
 	 * @param int $index Zero-based index of the grid on the page.
 	 * @return Response
 	 */
-	public function run( int $pageid, int $rev, int $index ): Response {
+	public function run( int $pageid, string $token, int $index ): Response {
 		$title = $this->resolveTitleOrThrow( $pageid );
 		$this->assertCanRead( $title );
 
@@ -83,9 +83,9 @@ class GridValuesHandler extends SimpleHandler {
 				ParamValidator::PARAM_TYPE => 'integer',
 				ParamValidator::PARAM_REQUIRED => true,
 			],
-			'rev' => [
+			'token' => [
 				self::PARAM_SOURCE => 'path',
-				ParamValidator::PARAM_TYPE => 'integer',
+				ParamValidator::PARAM_TYPE => 'string',
 				ParamValidator::PARAM_REQUIRED => true,
 			],
 			'index' => [

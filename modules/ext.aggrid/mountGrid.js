@@ -42,8 +42,8 @@ function parseConfig( el ) {
  */
 function readHandle( el ) {
 	const pageid = el.getAttribute( 'data-mw-aggrid-pageid' );
-	// The cache token: the rows' content hash for inline grids, the revision id for backend
-	// grids. Falls back to the pre-rename attribute so parser-cached HTML emitted before this
+	// The cache token: the rows' content hash for inline grids, the query spec's hash for
+	// backend grids. Falls back to the pre-rename attribute so parser-cached HTML emitted before this
 	// release (carrying data-mw-aggrid-rev) still mounts. TODO: drop the data-mw-aggrid-rev
 	// fallback ~1 week after release (tracked as a follow-up issue).
 	const token = el.getAttribute( 'data-mw-aggrid-token' ) ||
