@@ -37,6 +37,7 @@ return p
 | `aggrid.link( target, text? )` | `{ text, href }` or `nil` | A wikilink to page `target`. `text` defaults to the title's display text. `nil` if the title can't be parsed. |
 | `aggrid.thumb( file, width, opts? )` | `{ src, width, alt, href? }` or `nil` | A thumbnail of `file` (a `File:` title) at `width` px. `opts.link` makes it a *linked* thumbnail; `opts.alt` overrides the alt text (default: the file's page title). `nil` if the file is missing. |
 | `aggrid.linkList( targets )` | `{ links = { … } }` | A comma-separated row of wikilinks from a list of page titles. Unparseable titles are skipped. |
+| `aggrid.tagList( items )` | `{ links = { … } }` | A comma-separated row of tags; each item is a string (plain text) or `{ link = target, text? }` (a wikilink). Unparseable links are skipped. |
 
 ## Tag the column
 
@@ -49,6 +50,7 @@ through. `type` is managed by the helper, so setting it yourself has no effect.
 | `aggrid.linkColumn( spec )` | `aggridLink` | `link()` values |
 | `aggrid.imageColumn( spec )` | `aggridImage` | `thumb()` values |
 | `aggrid.linkListColumn( spec )` | `aggridLinkList` | `linkList()` values |
+| `aggrid.tagListColumn( spec )` | `aggridLinkList` | `tagList()` (or `linkList()`) values |
 
 Prefer to write it by hand? Set `type` directly: `{ field = 'name', type = 'aggridLink' }`.
 
@@ -59,7 +61,9 @@ Prefer to write it by hand? Set `type` directly: `{ field = 'name', type = 'aggr
   *linked* thumbnail.
 - **Sort, filter, and quick-search use the text, not the markup.** They read each cell's
   underlying text (link text, alt text, joined list text) while the cell shows the rich content —
-  so a [set filter](filters.md#set-filter) on a link column lists the link *text*.
+  so a [set filter](filters.md#set-filter) on a link column lists the link *text*, and on a
+  `linkList` / `tagList` column lists each value separately (a row matches if any of its values is
+  selected).
 - **Links and thumbnails resolve on the server** during the page parse, so the browser makes no
   extra requests to render a cell, and output is escaped by default (only `http(s):`,
   root-relative, `./`, and `#` link targets are allowed).
