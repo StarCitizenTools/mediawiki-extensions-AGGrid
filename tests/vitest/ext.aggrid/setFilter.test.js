@@ -661,3 +661,100 @@ describe( 'SetFilter itemRenderer', () => {
 		expect( glyphs.length ).toBe( 2 );
 	} );
 } );
+
+describe( 'SetFilter multi-value cells', () => {
+	// Build params over raw cell values (objects/arrays). getCellValue returns the raw
+	// value regardless of useFormatter — listValues splits {links}/arrays before any
+	// formatted fallback is reached.
+	function makeMultiParams( cells ) {
+		const nodes = cells.map( ( v ) => ( { data: { v } } ) );
+		const params = {
+			column: { id: 'c' },
+			colDef: {},
+			filterChangedCallback: vi.fn(),
+			api: {
+				forEachLeafNode: ( cb ) => nodes.forEach( cb ),
+				getCellValue: ( p ) => p.rowNode.data.v
+			}
+		};
+		return { params, nodes };
+	}
+
+	function tags( arr ) {
+		return { links: arr.map( ( t ) => ( { text: t } ) ) };
+	}
+
+	it( 'splits a { links } cell into one key per value with per-row counts', () => {
+		const { params } = makeMultiParams( [
+			tags( [ 'Manufacturing', 'Mining' ] ),
+			tags( [ 'Manufacturing', 'Retail' ] )
+		] );
+		const f = new SetFilter();
+		f.init( params );
+		expect( f.counts.get( 'Manufacturing' ) ).toBe( 2 );
+		expect( f.counts.get( 'Mining' ) ).toBe( 1 );
+		expect( f.counts.get( 'Retail' ) ).toBe( 1 );
+	} );
+
+	it( 'counts a repeated value within one row only once', () => {
+		const { params } = makeMultiParams( [ tags( [ 'A', 'A', 'B' ] ) ] );
+		const f = new SetFilter();
+		f.init( params );
+		expect( f.counts.get( 'A' ) ).toBe( 1 );
+		expect( f.counts.get( 'B' ) ).toBe( 1 );
+	} );
+
+	it( 'doesFilterPass is ANY-of across the cell values', () => {
+		const { params, nodes } = makeMultiParams( [
+			tags( [ 'Manufacturing', 'Mining' ] ),
+			tags( [ 'Retail' ] )
+		] );
+		const f = new SetFilter();
+		f.init( params );
+		f.setModel( { values: [ 'Manufacturing' ] } );
+		expect( f.doesFilterPass( { node: nodes[ 0 ] } ) ).toBe( true );
+		expect( f.doesFilterPass( { node: nodes[ 1 ] } ) ).toBe( false );
+	} );
+
+	it( 'hides a multi-value row only when all its values are deselected', () => {
+		const { params, nodes } = makeMultiParams( [ tags( [ 'A', 'B' ] ) ] );
+		const f = new SetFilter();
+		f.init( params );
+		f.setModel( { values: [ 'B' ] } );
+		expect( f.doesFilterPass( { node: nodes[ 0 ] } ) ).toBe( true );
+		f.setModel( { values: [] } );
+		expect( f.doesFilterPass( { node: nodes[ 0 ] } ) ).toBe( false );
+	} );
+
+	it( 'sends an empty { links } cell to the blanks bucket', () => {
+		const { params, nodes } = makeMultiParams( [ tags( [ 'A' ] ), { links: [] } ] );
+		const f = new SetFilter();
+		f.init( params );
+		expect( f.counts.get( '' ) ).toBe( 1 );
+		f.setModel( { values: [ 'A' ] } );
+		expect( f.doesFilterPass( { node: nodes[ 1 ] } ) ).toBe( false );
+	} );
+
+	it( 'enumerates an array returned by filterValueGetter', () => {
+		const nodes = [
+			{ data: { tags: [ 'A', 'B' ] } },
+			{ data: { tags: [ 'A' ] } }
+		];
+		const params = {
+			column: { id: 'c' },
+			colDef: { filterValueGetter: ( p ) => p.data.tags },
+			filterChangedCallback: vi.fn(),
+			api: {
+				forEachLeafNode: ( cb ) => nodes.forEach( cb ),
+				getCellValue: ( p ) => p.rowNode.data
+			}
+		};
+		const f = new SetFilter();
+		f.init( params );
+		expect( f.counts.get( 'A' ) ).toBe( 2 );
+		expect( f.counts.get( 'B' ) ).toBe( 1 );
+		f.setModel( { values: [ 'B' ] } );
+		expect( f.doesFilterPass( { node: nodes[ 0 ] } ) ).toBe( true );
+		expect( f.doesFilterPass( { node: nodes[ 1 ] } ) ).toBe( false );
+	} );
+} );

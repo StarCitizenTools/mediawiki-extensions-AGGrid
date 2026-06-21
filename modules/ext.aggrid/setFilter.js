@@ -10,6 +10,8 @@
 // than it sorts/searches on. Every label is built as a text node unless a
 // `filterParams.itemRenderer` is supplied; nothing built here uses innerHTML.
 
+const { listValues } = require( './renderers.js' );
+
 // Empty/null/undefined values collapse under this single key (shown as the blanks message).
 const BLANK_KEY = '';
 
@@ -33,16 +35,6 @@ function resolveValueGetter( params ) {
 	} );
 }
 
-// A node's value for this column: a caller-supplied valueGetter when present, else the
-// valueFormatter output when the column has one (rich columns do) or the raw value.
-// getCellValue with useFormatter is the v32+ API.
-function displayValue( api, column, node, valueGetter ) {
-	if ( valueGetter ) {
-		return valueGetter( node );
-	}
-	return api.getCellValue( { rowNode: node, colKey: column, useFormatter: true } );
-}
-
 function isBlank( v ) {
 	return v === null || v === undefined || v === '';
 }
@@ -52,6 +44,26 @@ function keyOf( v ) {
 	return isBlank( v ) ? BLANK_KEY : String( v );
 }
 
+// The individual filter values for a node's cell, always as an array. A filterValueGetter
+// result is used directly (a scalar becomes one entry; an array is used as-is with blanks
+// dropped). Otherwise the cell's raw value is split when structured ({ links: [...] } /
+// array); a non-list value falls back to the single formatted display value — today's
+// behaviour exactly (the formatter output sort/export use). An empty array means "no
+// values" and maps to the blanks bucket.
+function filterValuesOf( api, column, node, valueGetter ) {
+	if ( valueGetter ) {
+		const got = valueGetter( node );
+		return Array.isArray( got ) ? got.filter( ( v ) => !isBlank( v ) ) : [ got ];
+	}
+	const list = listValues(
+		api.getCellValue( { rowNode: node, colKey: column, useFormatter: false } )
+	);
+	if ( list ) {
+		return list;
+	}
+	return [ api.getCellValue( { rowNode: node, colKey: column, useFormatter: true } ) ];
+}
+
 // Compare two display labels for the value list: natural, case-insensitive,
 // number-aware alphabetical order (so "Item 2" sorts before "Item 10").
 function compareLabels( a, b ) {
@@ -59,7 +71,9 @@ function compareLabels( a, b ) {
 }
 
 /**
- * Walk all loaded leaf rows and tally unique display values for a column.
+ * Walk all loaded leaf rows and tally unique values for a column. A multi-value cell
+ * (a { links: [...] } list or an array) contributes each of its values, so one row can
+ * add to several keys and a value's count is the number of rows that contain it.
  *
  * This is the single seam where filter values come from. Today it reads the full loaded
  * client-side dataset (matching AG Grid's default: the value list is not narrowed by other
@@ -67,14 +81,17 @@ function compareLabels( a, b ) {
  *
  * @param {Object} api AG Grid GridApi.
  * @param {Object} column AG Grid Column (or column id).
- * @param {Function} [valueGetter] Optional node -> value function (from filterValueGetter).
+ * @param {Function} [valueGetter] Optional node -> value(s) function (from filterValueGetter).
  * @return {Map<string,number>} Insertion-ordered key → row count.
  */
 function deriveValues( api, column, valueGetter ) {
 	const counts = new Map();
 	api.forEachLeafNode( ( node ) => {
-		const key = keyOf( displayValue( api, column, node, valueGetter ) );
-		counts.set( key, ( counts.get( key ) || 0 ) + 1 );
+		const values = filterValuesOf( api, column, node, valueGetter );
+		const keys = values.length ?
+			Array.from( new Set( values.map( keyOf ) ) ) :
+			[ BLANK_KEY ];
+		keys.forEach( ( key ) => counts.set( key, ( counts.get( key ) || 0 ) + 1 ) );
 	} );
 	return counts;
 }
@@ -267,10 +284,13 @@ class SetFilter {
 		if ( this.serverBacked ) {
 			return true;
 		}
-		const key = keyOf(
-			displayValue( this.params.api, this.params.column, params.node, this.valueGetter )
+		const values = filterValuesOf(
+			this.params.api, this.params.column, params.node, this.valueGetter
 		);
-		return this.selected.has( key );
+		if ( !values.length ) {
+			return this.selected.has( BLANK_KEY );
+		}
+		return values.some( ( v ) => this.selected.has( keyOf( v ) ) );
 	}
 
 	getModel() {
