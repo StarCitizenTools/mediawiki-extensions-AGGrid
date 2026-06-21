@@ -138,7 +138,7 @@
 				"default": { "maxAge": 600 }
 			},
 			"merge_strategy": "array_plus_2d",
-			"description": "Per-source cache policy for grid REST responses, keyed by source. 'inline' is the materialized /rows path (content-addressed: the URL changes when rows change, so maxAge is a revalidation cadence, not a staleness ceiling). 'default' is the fallback for backend sources (a hard staleness ceiling — there is no purge when the underlying data changes). Add a backend source id (e.g. 'smw', 'bucket') to override it. Each entry: { maxAge: seconds, staleWhileRevalidate?: seconds }."
+			"description": "Per-source cache policy for grid REST responses, keyed by source. 'inline' is the materialized /rows path (content-addressed: the URL changes when rows change, so maxAge is a revalidation cadence, not a staleness ceiling). 'default' is the fallback for backend sources: maxAge bounds how stale the live query data may be (no purge when the queried data changes), but a change to the grid's query spec propagates instantly because the backend URL is content-addressed by the spec hash. Add a backend source id (e.g. 'smw', 'bucket') to override it. Each entry: { maxAge: seconds, staleWhileRevalidate?: seconds }."
 		},
 		"AGGridBucketMaxValues": {
 			"value": 1000,
