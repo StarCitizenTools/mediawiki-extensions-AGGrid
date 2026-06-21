@@ -164,3 +164,16 @@ describe( 'aggridLinkList mixed text/link items', () => {
 		expect( el.textContent ).toBe( 'Manufacturing, Mining' );
 	} );
 } );
+
+describe( 'rich column types opt out of cellDataType inference', () => {
+	// Without cellDataType:false, AG Grid infers type 'object' and injects a
+	// filterValueGetter returning the joined display string, which the set filter would use
+	// instead of the raw { links: [...] } value — collapsing a multi-value cell back into
+	// one option. Lock the opt-out in.
+	it( 'sets cellDataType:false on every object-valued built-in type', () => {
+		const types = buildColumnTypes();
+		[ 'aggridLink', 'aggridImage', 'aggridLinkList' ].forEach( ( name ) => {
+			expect( types[ name ].cellDataType ).toBe( false );
+		} );
+	} );
+} );

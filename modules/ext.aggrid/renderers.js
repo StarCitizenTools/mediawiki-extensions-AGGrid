@@ -131,20 +131,31 @@ function compareBy( extract ) {
 // never valueFormatter — so without it an object value would match as
 // '[object Object]'); comparator drives sort. All operate on the derived scalar,
 // never the raw object.
+//
+// cellDataType: false opts these object-valued columns out of AG Grid's cell-data-type
+// inference. Otherwise AG Grid infers type 'object' and injects its own valueFormatter,
+// keyCreator, and — critically — a `filterValueGetter` that returns the joined display
+// string. The set filter reads `colDef.filterValueGetter` for its values, so an injected
+// one shadows the raw { links: [...] } value and collapses a multi-value cell back into a
+// single "A, B" option. We supply our own valueFormatter/comparator, so disabling
+// inference loses nothing and lets the set filter split on the structured value.
 const COLUMN_TYPES = {
 	aggridLink: {
+		cellDataType: false,
 		cellRenderer: linkEl,
 		valueFormatter: ( p ) => linkText( p.value ),
 		getQuickFilterText: ( p ) => linkText( p.value ),
 		comparator: compareBy( linkText )
 	},
 	aggridImage: {
+		cellDataType: false,
 		cellRenderer: imageEl,
 		valueFormatter: ( p ) => imageAlt( p.value ),
 		getQuickFilterText: ( p ) => imageAlt( p.value ),
 		comparator: compareBy( imageAlt )
 	},
 	aggridLinkList: {
+		cellDataType: false,
 		cellRenderer: linkListEl,
 		valueFormatter: ( p ) => listText( p.value ),
 		getQuickFilterText: ( p ) => listText( p.value ),
