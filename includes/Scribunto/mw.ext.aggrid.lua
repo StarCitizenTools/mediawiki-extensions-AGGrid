@@ -113,14 +113,14 @@ function aggrid.linkList( targets )
 end
 
 --- Build a { links = {...} } multi-value cell from a mix of plain text and page links.
---- Each item is a string (a plain-text tag) or a table { link = <page title>, text = <display> }
+--- Each item is a string (a plain-text value) or a table { link = <page title>, text = <display> }
 --- (a wikilink via aggrid.link; `text` defaults to the title's text). Unparseable links are
 --- skipped. Pairs with the aggridLinkList renderer; the set filter splits it into one option
 --- per value.
 ---
 --- @param items table @Sequence of strings and/or { link, text } tables
 --- @return table @{ links = { {text}|{text,href}, ... } }
-function aggrid.tagList( items )
+function aggrid.list( items )
 	local links = {}
 	for _, item in ipairs( items ) do
 		if type( item ) == 'string' then
@@ -177,11 +177,11 @@ function aggrid.linkListColumn( spec )
 	return column( spec, 'aggridLinkList' )
 end
 
---- Column def for a multi-value tag column (cells built with aggrid.tagList). Reuses the
+--- Column def for a multi-value list column (cells built with aggrid.list). Reuses the
 --- aggridLinkList renderer; its set filter splits the cell into one option per value.
 --- @param spec table
 --- @return table
-function aggrid.tagListColumn( spec )
+function aggrid.listColumn( spec )
 	return column( spec, 'aggridLinkList' )
 end
 

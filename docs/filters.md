@@ -30,13 +30,13 @@ sort and quick-search behave.
 
 ### Multi-value columns
 
-A cell that holds **multiple values** — a [`linkList` / `tagList`](rich-cells.md) cell
+A cell that holds **multiple values** — a [`linkList` / `list`](rich-cells.md) cell
 (`{ links = … }`) or a plain array — is split into one checkbox per distinct value. A row passes
-when **any** of its values is selected, so to hide a row tagged both `A` and `B` you must deselect
+when **any** of its values is selected, so to hide a row with both `A` and `B` you must deselect
 both. Each value's count is the number of rows that contain it, so the counts can sum to more than
 the row total.
 
-Only **structured** multi-value cells split: the value must be a `linkList` / `tagList` cell or an
+Only **structured** multi-value cells split: the value must be a `linkList` / `list` cell or an
 array. A plain delimited string such as `"A, B"` stays a single option — AGGrid does not guess
 delimiters.
 
