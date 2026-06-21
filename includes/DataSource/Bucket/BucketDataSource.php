@@ -5,6 +5,7 @@ declare( strict_types=1 );
 namespace MediaWiki\Extension\AGGrid\DataSource\Bucket;
 
 use MediaWiki\Extension\AGGrid\DataSource\AbstractBackendDataSource;
+use MediaWiki\Extension\AGGrid\DataSource\CachePolicy;
 use MediaWiki\Extension\AGGrid\Service\SourceSpecStore;
 use MediaWiki\Title\Title;
 use RuntimeException;
@@ -45,10 +46,10 @@ class BucketDataSource extends AbstractBackendDataSource {
 		SourceSpecStore $specStore,
 		private readonly BucketFilterTranslator $filterTranslator,
 		private readonly BucketColumnMapper $columnMapper,
-		int $cacheMaxAge,
+		CachePolicy $cachePolicy,
 		int $maxValues
 	) {
-		parent::__construct( $specStore, $cacheMaxAge, $maxValues );
+		parent::__construct( $specStore, $cachePolicy, $maxValues );
 	}
 
 	/** @inheritDoc */

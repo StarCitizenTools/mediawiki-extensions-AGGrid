@@ -46,7 +46,7 @@ All settings are optional.
 
 | Setting | Default | Description |
 | --- | --- | --- |
-| `$wgAGGridBackendCacheMaxAge` | `600` | Max-age (seconds) for backend-source grid REST responses (the row pages and column values). Higher cuts backend load but is a hard staleness ceiling — there's no purge when the underlying data changes. |
+| `$wgAGGridCacheControl` | `{ "inline": { "maxAge": 86400, "staleWhileRevalidate": 604800 }, "default": { "maxAge": 600 } }` | Per-source cache policy for grid REST responses. `inline` is the content-addressed materialized `/rows` path (maxAge is a revalidation cadence, not a staleness ceiling). `default` is the fallback for backend sources (a hard staleness ceiling — no purge when the underlying data changes); override per source with its id, e.g. `"smw"` / `"bucket"`. |
 | `$wgAGGridBucketMaxValues` | `1000` | Maximum rows scanned when listing a Bucket column's set-filter values; the list is marked partial when reached. |
 
 ## 🚀 Quick start

@@ -5,6 +5,7 @@ declare( strict_types=1 );
 namespace MediaWiki\Extension\AGGrid\Tests\Unit;
 
 use MediaWiki\Extension\AGGrid\DataSource\AbstractBackendDataSource;
+use MediaWiki\Extension\AGGrid\DataSource\CachePolicy;
 use MediaWiki\Extension\AGGrid\Service\SourceSpecStore;
 use MediaWikiUnitTestCase;
 use RuntimeException;
@@ -28,7 +29,8 @@ class AbstractBackendDataSourceTest extends MediaWikiUnitTestCase {
 		$specStore = $this->createMock( SourceSpecStore::class );
 		$specStore->method( 'getSource' )->willReturn( $stored );
 
-		return new class( $specStore, self::CACHE_MAX_AGE, self::MAX_VALUES ) extends AbstractBackendDataSource {
+		$policy = new CachePolicy( self::CACHE_MAX_AGE );
+		return new class( $specStore, $policy, self::MAX_VALUES ) extends AbstractBackendDataSource {
 			/** @var callable */
 			public $executeQueryFn;
 			/** @var callable */
@@ -38,8 +40,8 @@ class AbstractBackendDataSourceTest extends MediaWikiUnitTestCase {
 			/** @var callable */
 			public $fetchFn;
 
-			public function __construct( $specStore, int $cacheMaxAge, int $maxValues ) {
-				parent::__construct( $specStore, $cacheMaxAge, $maxValues );
+			public function __construct( $specStore, CachePolicy $cachePolicy, int $maxValues ) {
+				parent::__construct( $specStore, $cachePolicy, $maxValues );
 				$this->executeQueryFn = static fn (): array => [];
 				$this->countTotalFn = static fn (): int => 0;
 				$this->mapRowFn = static fn ( array $r ): array => $r;
@@ -75,10 +77,10 @@ class AbstractBackendDataSourceTest extends MediaWikiUnitTestCase {
 		};
 	}
 
-	public function testGetCachePolicyIsPrivateWithConfiguredMaxAge(): void {
+	public function testGetCachePolicyUsesConfiguredMaxAge(): void {
 		$policy = $this->newSource( [ 'spec' => [ 'query' => 'X' ] ] )->getCachePolicy();
-		$this->assertFalse( $policy->isPublic() );
 		$this->assertSame( self::CACHE_MAX_AGE, $policy->getMaxAge() );
+		$this->assertSame( 0, $policy->getStaleWhileRevalidate() );
 	}
 
 	public function testGetPageMapsEachRowAndPairsWithTotal(): void {

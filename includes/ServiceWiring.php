@@ -12,6 +12,7 @@ use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketFilterTranslator;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketRunner;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketSchemaReader;
 use MediaWiki\Extension\AGGrid\DataSource\Bucket\BucketSourceCompiler;
+use MediaWiki\Extension\AGGrid\DataSource\CachePolicyResolver;
 use MediaWiki\Extension\AGGrid\DataSource\Smw\FilterTranslator;
 use MediaWiki\Extension\AGGrid\DataSource\Smw\SmwBackend;
 use MediaWiki\Extension\AGGrid\DataSource\Smw\SmwDataSource;
@@ -66,8 +67,10 @@ return [
 			static fn ( string $ext ): bool => ExtensionRegistry::getInstance()->isLoaded( $ext )
 		);
 	},
-	'AGGrid.BackendCacheMaxAge' => static function ( MediaWikiServices $services ): int {
-		return (int)$services->getMainConfig()->get( 'AGGridBackendCacheMaxAge' );
+	'AGGrid.CachePolicyResolver' => static function ( MediaWikiServices $services ): CachePolicyResolver {
+		return new CachePolicyResolver(
+			(array)$services->getMainConfig()->get( 'AGGridCacheControl' )
+		);
 	},
 	'AGGrid.SmwDataSource' => static function ( MediaWikiServices $services ): SmwDataSource {
 		// SMW services are resolved lazily inside the closure so this entry can be
@@ -77,7 +80,7 @@ return [
 			$services->getService( 'AGGrid.SourceSpecStore' ),
 			new FilterTranslator(),
 			new TypeColumnMapper(),
-			$services->getService( 'AGGrid.BackendCacheMaxAge' ),
+			$services->getService( 'AGGrid.CachePolicyResolver' )->forSource( 'smw' ),
 			(int)$GLOBALS['smwgQMaxInlineLimit']
 		);
 	},
@@ -110,7 +113,7 @@ return [
 			$services->getService( 'AGGrid.SourceSpecStore' ),
 			new BucketFilterTranslator(),
 			new BucketColumnMapper(),
-			$services->getService( 'AGGrid.BackendCacheMaxAge' ),
+			$services->getService( 'AGGrid.CachePolicyResolver' )->forSource( 'bucket' ),
 			$services->getService( 'AGGrid.BucketMaxValues' )
 		);
 	},

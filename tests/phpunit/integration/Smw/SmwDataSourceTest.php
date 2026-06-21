@@ -4,6 +4,7 @@ declare( strict_types=1 );
 
 namespace MediaWiki\Extension\AGGrid\Tests\Integration\Smw;
 
+use MediaWiki\Extension\AGGrid\DataSource\CachePolicy;
 use MediaWiki\Extension\AGGrid\DataSource\Smw\FilterTranslator;
 use MediaWiki\Extension\AGGrid\DataSource\Smw\SmwDataSource;
 use MediaWiki\Extension\AGGrid\DataSource\Smw\SmwQueryException;
@@ -104,7 +105,7 @@ class SmwDataSourceTest extends MediaWikiIntegrationTestCase {
 			$specStore,
 			new FilterTranslator(),
 			new TypeColumnMapper(),
-			120,
+			new CachePolicy( 120 ),
 			$maxValues
 		);
 	}
@@ -443,7 +444,7 @@ class SmwDataSourceTest extends MediaWikiIntegrationTestCase {
 		$specStore = $this->createMock( SourceSpecStore::class );
 		$specStore->method( 'getSource' )->willReturn( null );
 		$source = new SmwDataSource(
-			$store, $specStore, new FilterTranslator(), new TypeColumnMapper(), 120, 50
+			$store, $specStore, new FilterTranslator(), new TypeColumnMapper(), new CachePolicy( 120 ), 50
 		);
 
 		$this->expectExceptionMessage( 'no SMW source spec' );
@@ -794,6 +795,6 @@ class SmwDataSourceTest extends MediaWikiIntegrationTestCase {
 		$source = $this->newDataSource( $this->queryResult( [] ) );
 		$policy = $source->getCachePolicy();
 		$this->assertSame( 120, $policy->getMaxAge() );
-		$this->assertFalse( $policy->isPublic() );
+		$this->assertSame( 0, $policy->getStaleWhileRevalidate() );
 	}
 }

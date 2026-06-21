@@ -26,4 +26,14 @@ interface GridDataStore extends DataSource {
 	 * @param int $pageId
 	 */
 	public function deleteForPage( int $pageId ): void;
+
+	/**
+	 * Read a stored grid's rows together with their content hash (agd_hash), in one query.
+	 *
+	 * @param int $pageId
+	 * @param int $gridIndex
+	 * @return array{rows: array, hash: string}|null Null only when no row exists for the handle
+	 *   (a real zero-row grid returns rows => []).
+	 */
+	public function getRowsAndHash( int $pageId, int $gridIndex ): ?array;
 }

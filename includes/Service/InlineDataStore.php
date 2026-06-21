@@ -99,4 +99,24 @@ final class InlineDataStore implements GridDataStore {
 		}
 		return json_decode( $blob, true );
 	}
+
+	/**
+	 * @inheritDoc
+	 */
+	public function getRowsAndHash( int $pageId, int $gridIndex ): ?array {
+		$row = $this->dbProvider->getReplicaDatabase()
+			->newSelectQueryBuilder()
+			->select( [ 'agd_rows', 'agd_hash' ] )
+			->from( 'aggrid_data' )
+			->where( [ 'agd_page_id' => $pageId, 'agd_grid_index' => $gridIndex ] )
+			->caller( __METHOD__ )->fetchRow();
+
+		if ( $row === false ) {
+			return null;
+		}
+		return [
+			'rows' => json_decode( $row->agd_rows, true ),
+			'hash' => (string)$row->agd_hash,
+		];
+	}
 }

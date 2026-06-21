@@ -69,4 +69,27 @@ class InlineDataStoreTest extends MediaWikiIntegrationTestCase {
 		$store->deleteForPage( 100 );
 		$this->assertNull( $store->getRows( 100, 0 ) );
 	}
+
+	public function testGetRowsAndHashReturnsRowsAndStoredHash(): void {
+		$store = $this->store();
+		$grid = $this->grid( [ [ 'name' => 'Aurora' ] ] );
+		$store->replaceForPage( 100, [ 0 => $grid ] );
+
+		$result = $store->getRowsAndHash( 100, 0 );
+		$this->assertSame( [ [ 'name' => 'Aurora' ] ], $result['rows'] );
+		$this->assertSame( $grid['hash'], $result['hash'] );
+
+		$this->assertNull( $store->getRowsAndHash( 100, 1 ), 'unknown index → null' );
+		$this->assertNull( $store->getRowsAndHash( 999, 0 ), 'unknown page → null' );
+	}
+
+	public function testGetRowsAndHashDistinguishesZeroRowFromMiss(): void {
+		$store = $this->store();
+		$store->replaceForPage( 100, [ 0 => $this->grid( [] ) ] );
+
+		$result = $store->getRowsAndHash( 100, 0 );
+		$this->assertIsArray( $result, 'zero-row grid is not a miss' );
+		$this->assertSame( [], $result['rows'] );
+		$this->assertSame( sha1( '[]' ), $result['hash'] );
+	}
 }

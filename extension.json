@@ -58,7 +58,7 @@
 	},
 	"RestRoutes": [
 		{
-			"path": "/aggrid/v0/grid/{pageid}/{rev}/{index}/rows",
+			"path": "/aggrid/v0/grid/{pageid}/{token}/{index}/rows",
 			"method": "GET",
 			"class": "MediaWiki\\Extension\\AGGrid\\Rest\\GridRowsHandler",
 			"services": [
@@ -66,7 +66,8 @@
 				"PermissionManager",
 				"TitleFactory",
 				"UserFactory",
-				"AGGrid.GridDataPopulator"
+				"AGGrid.GridDataPopulator",
+				"AGGrid.CachePolicyResolver"
 			]
 		},
 		{
@@ -131,9 +132,13 @@
 		}
 	},
 	"config": {
-		"AGGridBackendCacheMaxAge": {
-			"value": 600,
-			"description": "Max-age (seconds) for backend-source grid REST responses (row pages and column values). Higher reduces backend load but is a hard staleness ceiling — there is no cache purge when the underlying data changes."
+		"AGGridCacheControl": {
+			"value": {
+				"inline": { "maxAge": 86400, "staleWhileRevalidate": 604800 },
+				"default": { "maxAge": 600 }
+			},
+			"merge_strategy": "array_plus_2d",
+			"description": "Per-source cache policy for grid REST responses, keyed by source. 'inline' is the materialized /rows path (content-addressed: the URL changes when rows change, so maxAge is a revalidation cadence, not a staleness ceiling). 'default' is the fallback for backend sources (a hard staleness ceiling — there is no purge when the underlying data changes). Add a backend source id (e.g. 'smw', 'bucket') to override it. Each entry: { maxAge: seconds, staleWhileRevalidate?: seconds }."
 		},
 		"AGGridBucketMaxValues": {
 			"value": 1000,

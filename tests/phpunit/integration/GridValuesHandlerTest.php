@@ -109,7 +109,7 @@ class GridValuesHandlerTest extends MediaWikiIntegrationTestCase {
 				'partial' => true,
 			] );
 		}
-		$ds->method( 'getCachePolicy' )->willReturn( new CachePolicy( true, self::CACHE_MAX_AGE ) );
+		$ds->method( 'getCachePolicy' )->willReturn( new CachePolicy( self::CACHE_MAX_AGE ) );
 		return $ds;
 	}
 
@@ -236,7 +236,7 @@ class GridValuesHandlerTest extends MediaWikiIntegrationTestCase {
 		// populator-resolved spec to getColumnValues so it serves from it, not the store.
 		$spec = [ 'query' => '[[Category:FromParse]]' ];
 		$ds = $this->createMock( BackendDataSource::class );
-		$ds->method( 'getCachePolicy' )->willReturn( new CachePolicy( true, self::CACHE_MAX_AGE ) );
+		$ds->method( 'getCachePolicy' )->willReturn( new CachePolicy( self::CACHE_MAX_AGE ) );
 		$ds->expects( $this->once() )
 			->method( 'getColumnValues' )
 			->with( self::PAGE_ID, 0, 'myCol', $spec )
@@ -255,7 +255,7 @@ class GridValuesHandlerTest extends MediaWikiIntegrationTestCase {
 
 	public function testColumnIsPassedToDataSource(): void {
 		$ds = $this->createMock( BackendDataSource::class );
-		$ds->method( 'getCachePolicy' )->willReturn( new CachePolicy( true, self::CACHE_MAX_AGE ) );
+		$ds->method( 'getCachePolicy' )->willReturn( new CachePolicy( self::CACHE_MAX_AGE ) );
 		$ds->expects( $this->once() )
 			->method( 'getColumnValues' )
 			->with( self::PAGE_ID, 0, 'mySpecificCol' )
