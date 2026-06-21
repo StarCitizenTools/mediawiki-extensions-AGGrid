@@ -758,3 +758,59 @@ describe( 'SetFilter multi-value cells', () => {
 		expect( f.doesFilterPass( { node: nodes[ 1 ] } ) ).toBe( false );
 	} );
 } );
+
+describe( 'SetFilter raw vs formatted cell value', () => {
+	// A faithful getCellValue honouring useFormatter: false -> the RAW value (structured
+	// object or scalar), true -> the FORMATTED display string. This pins the production
+	// contract the feature rests on: list-shape is detected on the raw value, while a
+	// non-list cell keys on the formatter output.
+	function makeFormatterParams( rows ) {
+		// rows: [ { raw, formatted } ]
+		const nodes = rows.map( ( r ) => ( { data: r } ) );
+		const params = {
+			column: { id: 'c' },
+			colDef: {},
+			filterChangedCallback: vi.fn(),
+			api: {
+				forEachLeafNode: ( cb ) => nodes.forEach( cb ),
+				getCellValue: ( p ) => ( p.useFormatter ?
+					p.rowNode.data.formatted : p.rowNode.data.raw )
+			}
+		};
+		return { params, nodes };
+	}
+
+	it( 'splits a structured { links } raw value, not the joined formatted string', () => {
+		const { params } = makeFormatterParams( [
+			{ raw: { links: [ { text: 'A' }, { text: 'B' } ] }, formatted: 'A, B' }
+		] );
+		const f = new SetFilter();
+		f.init( params );
+		expect( f.counts.has( 'A' ) ).toBe( true );
+		expect( f.counts.has( 'B' ) ).toBe( true );
+		expect( f.counts.has( 'A, B' ) ).toBe( false );
+	} );
+
+	it( 'keys a single rich (non-list) raw value on its formatted text', () => {
+		// A single { text, href } link: raw is an object (listValues -> null), so the
+		// formatted text is the one value — never the raw object.
+		const { params, nodes } = makeFormatterParams( [
+			{ raw: { text: 'Aurora', href: '/wiki/Aurora' }, formatted: 'Aurora' }
+		] );
+		const f = new SetFilter();
+		f.init( params );
+		expect( f.counts.has( 'Aurora' ) ).toBe( true );
+		f.setModel( { values: [ 'Aurora' ] } );
+		expect( f.doesFilterPass( { node: nodes[ 0 ] } ) ).toBe( true );
+	} );
+
+	it( 'keys a formatted scalar on the formatter output, not the raw value', () => {
+		// A number column with a formatter: raw 1234 (listValues -> null) -> use formatted
+		// "1,234". Guards against "just reuse the raw scalar" — it would key on the wrong text.
+		const { params } = makeFormatterParams( [ { raw: 1234, formatted: '1,234' } ] );
+		const f = new SetFilter();
+		f.init( params );
+		expect( f.counts.has( '1,234' ) ).toBe( true );
+		expect( f.counts.has( '1234' ) ).toBe( false );
+	} );
+} );

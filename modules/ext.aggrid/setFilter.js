@@ -50,6 +50,11 @@ function keyOf( v ) {
 // array); a non-list value falls back to the single formatted display value — today's
 // behaviour exactly (the formatter output sort/export use). An empty array means "no
 // values" and maps to the blanks bucket.
+//
+// The two getCellValue calls (raw, then formatted) are deliberate: list-shape must be read
+// from the *raw* value, but a non-list cell still keys on its *formatted* text — a rich
+// { text, href } link, or a number column's formatted output ("1,234" not 1234) — so the
+// raw value cannot simply be reused as the label.
 function filterValuesOf( api, column, node, valueGetter ) {
 	if ( valueGetter ) {
 		const got = valueGetter( node );
