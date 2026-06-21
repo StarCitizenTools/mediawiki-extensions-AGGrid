@@ -112,6 +112,33 @@ function aggrid.linkList( targets )
 	return { links = links }
 end
 
+--- Build a { links = {...} } multi-value cell from a mix of plain text and page links.
+--- Each item is a string (a plain-text value) or a table { link = <page title>, text = <display> }
+--- (a wikilink via aggrid.link; `text` defaults to the title's text). Unparseable links are
+--- skipped. Pairs with the aggridLinkList renderer; the set filter splits it into one option
+--- per value.
+---
+--- @param items table @Sequence of strings and/or { link, text } tables
+--- @return table @{ links = { {text}|{text,href}, ... } }
+function aggrid.list( items )
+	local links = {}
+	for _, item in ipairs( items ) do
+		if type( item ) == 'string' then
+			links[ #links + 1 ] = { text = item }
+		elseif type( item ) == 'table' then
+			if item.link ~= nil then
+				local link = aggrid.link( item.link, item.text )
+				if link then
+					links[ #links + 1 ] = link
+				end
+			elseif item.text ~= nil then
+				links[ #links + 1 ] = { text = item.text }
+			end
+		end
+	end
+	return { links = links }
+end
+
 -- Shallow-copy a column spec, preset its renderer type, and map `header` to AG Grid's
 -- `headerName` so authors can use the shorter key. Note: the spec's `type` is reserved
 -- and always overwritten with the helper's renderer type; pass `headerName` directly if
@@ -147,6 +174,14 @@ end
 --- @param spec table
 --- @return table
 function aggrid.linkListColumn( spec )
+	return column( spec, 'aggridLinkList' )
+end
+
+--- Column def for a multi-value list column (cells built with aggrid.list). Reuses the
+--- aggridLinkList renderer; its set filter splits the cell into one option per value.
+--- @param spec table
+--- @return table
+function aggrid.listColumn( spec )
 	return column( spec, 'aggridLinkList' )
 end
 

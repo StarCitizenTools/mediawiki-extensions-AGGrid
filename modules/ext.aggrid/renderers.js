@@ -103,6 +103,22 @@ function listText( v ) {
 		.filter( ( l ) => l ).map( ( l ) => orEmpty( l.text ) ).join( ', ' );
 }
 
+// The individual filter values of a (possibly multi-value) cell value, blanks dropped:
+// a { links: [...] } list yields each link's text; a plain array yields its elements;
+// anything else yields null (the caller treats it as a single value). The set filter uses
+// this to offer one checkbox per value and pass a row when ANY value is selected.
+function listValues( v ) {
+	let items;
+	if ( v && Array.isArray( v.links ) ) {
+		items = v.links.map( ( l ) => l && l.text );
+	} else if ( Array.isArray( v ) ) {
+		items = v;
+	} else {
+		return null;
+	}
+	return items.filter( ( x ) => x !== undefined && x !== null && x !== '' );
+}
+
 // Build a locale-aware comparator that sorts on a value's derived scalar text.
 function compareBy( extract ) {
 	return ( a, b ) => String( extract( a ) ).localeCompare( String( extract( b ) ) );
@@ -115,20 +131,31 @@ function compareBy( extract ) {
 // never valueFormatter — so without it an object value would match as
 // '[object Object]'); comparator drives sort. All operate on the derived scalar,
 // never the raw object.
+//
+// cellDataType: false opts these object-valued columns out of AG Grid's cell-data-type
+// inference. Otherwise AG Grid infers type 'object' and injects its own valueFormatter,
+// keyCreator, and — critically — a `filterValueGetter` that returns the joined display
+// string. The set filter reads `colDef.filterValueGetter` for its values, so an injected
+// one shadows the raw { links: [...] } value and collapses a multi-value cell back into a
+// single "A, B" option. We supply our own valueFormatter/comparator, so disabling
+// inference loses nothing and lets the set filter split on the structured value.
 const COLUMN_TYPES = {
 	aggridLink: {
+		cellDataType: false,
 		cellRenderer: linkEl,
 		valueFormatter: ( p ) => linkText( p.value ),
 		getQuickFilterText: ( p ) => linkText( p.value ),
 		comparator: compareBy( linkText )
 	},
 	aggridImage: {
+		cellDataType: false,
 		cellRenderer: imageEl,
 		valueFormatter: ( p ) => imageAlt( p.value ),
 		getQuickFilterText: ( p ) => imageAlt( p.value ),
 		comparator: compareBy( imageAlt )
 	},
 	aggridLinkList: {
+		cellDataType: false,
 		cellRenderer: linkListEl,
 		valueFormatter: ( p ) => listText( p.value ),
 		getQuickFilterText: ( p ) => listText( p.value ),
@@ -157,6 +184,7 @@ module.exports = {
 	anchorWrap,
 	withLink,
 	buildColumnTypes,
+	listValues,
 	// @internal — exported for tests only. Consume the built-in types via
 	// buildColumnTypes(), which applies the withLink href modifier.
 	COLUMN_TYPES

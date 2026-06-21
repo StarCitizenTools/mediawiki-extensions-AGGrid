@@ -28,6 +28,18 @@ sort and quick-search behave.
   do not narrow it.
 - On a [backend source grid](data-sources.md), the distinct values are fetched from the server.
 
+### Multi-value columns
+
+A cell that holds **multiple values** — a [`linkList` / `list`](rich-cells.md) cell
+(`{ links = … }`) or a plain array — is split into one checkbox per distinct value. A row passes
+when **any** of its values is selected, so to hide a row with both `A` and `B` you must deselect
+both. Each value's count is the number of rows that contain it, so the counts can sum to more than
+the row total.
+
+Only **structured** multi-value cells split: the value must be a `linkList` / `list` cell or an
+array. A plain delimited string such as `"A, B"` stays a single option — AGGrid does not guess
+delimiters.
+
 ### Filtering on a different facet
 
 To make a column *filter* on a different value than it *shows*, use one of two approaches,
