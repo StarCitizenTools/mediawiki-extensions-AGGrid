@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.0](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/compare/v0.4.0...v0.5.0) (2026-06-21)
+
+
+### Features
+
+* **filter:** multi-value set filter (list helper + linkList split) ([#47](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/issues/47)) ([3457a14](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/3457a14f2640093c548ead6d53148f35545bb269))
+
+
+### Bug Fixes
+
+* **cache:** content-address backend /page + /values cache key by spec hash ([#46](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/issues/46)) ([f9d7125](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/f9d71254ea2103593806fcfb3cfe79aa5d1f282a))
+* **cache:** content-address inline grid rows to stop stale CDN serving ([#39](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/issues/39)) ([#43](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/issues/43)) ([b82bfcc](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/b82bfcc6c44e639258b0e3bf6cb57ac5036edeaa))
+
 ## [0.4.0](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/compare/v0.3.0...v0.4.0) (2026-06-13)
 
 
