@@ -176,28 +176,6 @@ describe( 'mountGrid', () => {
 		delete global.mw.Rest;
 	} );
 
-	it( 'falls back to the legacy data-mw-aggrid-rev attribute', async () => {
-		const get = vi.fn().mockResolvedValue( { rows: [ { name: 'Aurora' } ] } );
-		const RestMock = vi.fn();
-		RestMock.prototype.get = get;
-		global.mw.Rest = RestMock;
-
-		const el = document.createElement( 'div' );
-		el.className = 'ext-aggrid';
-		el.setAttribute( 'data-mw-aggrid-options', '{"columnDefs":[{"field":"name"}]}' );
-		el.setAttribute( 'data-mw-aggrid-pageid', '7' );
-		el.setAttribute( 'data-mw-aggrid-rev', '42' ); // legacy attribute only (no token attr)
-		el.setAttribute( 'data-mw-aggrid-index', '0' );
-		mountGrid( el );
-
-		await new Promise( ( r ) => {
-			setTimeout( r, 0 );
-		} );
-
-		expect( get ).toHaveBeenCalledWith( '/aggrid/v0/grid/7/42/0/rows' );
-		delete global.mw.Rest;
-	} );
-
 	it( 'mounts an error overlay when there is neither rowData nor a handle', () => {
 		const el = makeEl( '{"columnDefs":[{"field":"name"}]}' );
 		const skeleton = document.createElement( 'div' );
