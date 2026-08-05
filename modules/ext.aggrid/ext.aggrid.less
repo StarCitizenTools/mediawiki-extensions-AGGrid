@@ -61,6 +61,15 @@
 		cursor: pointer;
 	}
 
+	// The mini-filter hides non-matching rows with the `hidden` attribute, but
+	// AG Grid's own `.ag-set-filter-item { display: flex }` is an author-origin
+	// rule, so it beats the user-agent `[hidden] { display: none }` and every
+	// row stays visible. Restore the attribute's meaning; scoped under the root
+	// like the other overrides, so no !important is needed.
+	.ext-aggrid-setfilter__item[ hidden ] {
+		display: none;
+	}
+
 	// AG Grid's theme rule for the checkbox-to-label gap
 	// ( :where(.ag-ltr) :where(.ag-label-align-right) .ag-label { margin-left: var(--ag-spacing) } )
 	// lives in a stylesheet AG Grid injects lazily; it is absent on the first filter open, so the
