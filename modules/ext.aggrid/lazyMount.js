@@ -2,9 +2,13 @@ const { mountGrid, mountAll } = require( './mountGrid.js' );
 
 const PLACEHOLDER_SELECTOR = '.ext-aggrid';
 const INIT_CLASS = 'ext-aggrid--init';
-// AG Grid version, kept in sync with modules/lib/foreign-resources.yaml. Used to
-// cache-bust the static script URL when the vendored bundle is updated.
-const AG_GRID_VERSION = '35.3.0';
+// Full URL of the vendored bundle, built server-side (see
+// includes/ResourceLoader/Bundle.php) so the path is spelled in one place and
+// the cache-busting token is derived from the bundle's own bytes — a dependency
+// bump cannot forget to change it. ResourceLoader replaces this file with the
+// generated one; the committed placeholder exists only so Node and eslint can
+// resolve the require outside ResourceLoader (i.e. in unit tests).
+const { src: BUNDLE_SRC } = require( './bundle.json' );
 // Start loading slightly before a grid scrolls into view.
 const ROOT_MARGIN = '200px';
 
@@ -31,10 +35,8 @@ function loadAgGrid() {
 			resolve();
 			return;
 		}
-		const base = mw.config.get( 'wgExtensionAssetsPath' );
-		const src = `${ base }/AGGrid/modules/lib/ag-grid-community/ag-grid-community.min.js?v=${ AG_GRID_VERSION }`;
 		const script = document.createElement( 'script' );
-		script.src = src;
+		script.src = BUNDLE_SRC;
 		script.onload = () => resolve();
 		script.onerror = () => {
 			loadPromise = null;
