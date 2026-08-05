@@ -14,6 +14,9 @@ jobs:
     with:
       project-type: extension
       project-name: AGGrid
+      # extension.json requires Scribunto, and manageForeignResources loads
+      # AGGrid through the extension registry, which enforces it.
+      extra-extensions: Scribunto
       # fix(deps) so merged update PRs cut a release-please patch release;
       # the rest of the title is generated from the bumped packages.
       pr-title-prefix: "fix(deps)"
