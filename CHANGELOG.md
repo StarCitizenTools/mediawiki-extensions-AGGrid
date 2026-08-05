@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.1](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/compare/v0.5.0...v0.5.1) (2026-08-05)
+
+
+### Bug Fixes
+
+* **deps:** bump ag-grid-community from 35.3.0 to 36.0.2 ([b424b9b](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/b424b9bf6d3b1be971f8ae6f0a378ace58d1fd85))
+* **loader:** build the AG Grid bundle URL server-side ([5e5b90c](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/5e5b90cf25eb353fe7b9ba22b056b52710cfeebb))
+* **setfilter:** make the popup search actually hide non-matching values ([#59](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/issues/59)) ([a3694fc](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/a3694fcc7aee3c4e6ddff4db06c263c8be3317fa))
+
 ## [0.5.0](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/compare/v0.4.0...v0.5.0) (2026-06-21)
 
 
