@@ -113,7 +113,12 @@
 				"ext.aggrid/registry.js",
 				"ext.aggrid/format.js",
 				"ext.aggrid/setFilter.js",
-				"ext.aggrid/quickSearch.js"
+				"ext.aggrid/quickSearch.js",
+				{
+					"name": "ext.aggrid/bundle.json",
+					"callback": "MediaWiki\\Extension\\AGGrid\\ResourceLoader\\Bundle::makePackageFile",
+					"versionCallback": "MediaWiki\\Extension\\AGGrid\\ResourceLoader\\Bundle::getVersionFilePath"
+				}
 			],
 			"dependencies": [
 				"mediawiki.api"
