@@ -16,6 +16,32 @@ let loadPromise = null;
 let observer = null;
 
 /**
+ * Register AG Grid's ValidationModule when the wiki is in debug mode.
+ *
+ * The Community bundle ships the whole validation catalogue but registers none of
+ * it, so every gridOptions/colDef conflict is swallowed — including ones the grid
+ * then acts on, e.g. #318 (`colDef.flex` conflicts with `gridOptions.autoSizeStrategy`,
+ * where the strategy silently nulls the author's flex). Registering it behind
+ * `debug` keeps the warnings out of readers' consoles while making them reachable
+ * with `?debug=true`.
+ */
+function registerValidation() {
+	const debug = typeof mw !== 'undefined' && mw.config && mw.config.get( 'debug' );
+	if ( !debug || !window.agGrid || !window.agGrid.ValidationModule ) {
+		return;
+	}
+	try {
+		window.agGrid.ModuleRegistry.registerModules( [ window.agGrid.ValidationModule ] );
+	} catch ( e ) {
+		// This runs inside script.onload, before the load promise resolves: a throw
+		// here would strand every grid on the page at "loading". The bundle is bumped
+		// by a bot whose pull requests do not run CI, so a renamed export must degrade
+		// to "no warnings", never to "no grids".
+		mw.log.warn( '[ext.aggrid] could not register AG Grid validation', e );
+	}
+}
+
+/**
  * Load the AG Grid bundle from its static asset URL, once. Memoised so
  * simultaneous callers share a single <script> injection.
  *
@@ -32,12 +58,16 @@ function loadAgGrid() {
 	}
 	loadPromise = new Promise( ( resolve, reject ) => {
 		if ( window.agGrid ) {
+			registerValidation();
 			resolve();
 			return;
 		}
 		const script = document.createElement( 'script' );
 		script.src = BUNDLE_SRC;
-		script.onload = () => resolve();
+		script.onload = () => {
+			registerValidation();
+			resolve();
+		};
 		script.onerror = () => {
 			loadPromise = null;
 			script.remove();
