@@ -36,6 +36,49 @@ describe( 'lazyMount', () => {
 		delete window.agGrid;
 	} );
 
+	// AG Grid's Community bundle ships the whole validation catalogue but registers
+	// none of it, so conflicts like #318 (colDef.flex vs gridOptions.autoSizeStrategy,
+	// where the strategy silently nulls the author's flex) never reach the console.
+	describe( 'ValidationModule registration', () => {
+		function stubRegistry() {
+			const registerModules = vi.fn();
+			global.agGrid.ValidationModule = { name: 'validation' };
+			global.agGrid.ModuleRegistry = { registerModules };
+			window.agGrid = global.agGrid;
+			return registerModules;
+		}
+
+		it( 'registers it when the wiki is in debug mode', async () => {
+			const registerModules = stubRegistry();
+			await loadAgGrid();
+			expect( registerModules ).toHaveBeenCalledWith( [ global.agGrid.ValidationModule ] );
+		} );
+
+		it( 'leaves it unregistered otherwise, so readers get a quiet console', async () => {
+			const registerModules = stubRegistry();
+			global.mw.config.get = ( key ) => ( key === 'debug' ? 0 : '/w/extensions' );
+			await loadAgGrid();
+			expect( registerModules ).not.toHaveBeenCalled();
+		} );
+
+		it( 'still resolves the load promise when registration throws', async () => {
+			// This runs inside script.onload, ahead of resolve(): a throw here would
+			// strand every grid on the page at "loading". The bundle is bumped by a bot
+			// whose pull requests do not run CI, so a renamed export must cost warnings,
+			// never grids.
+			global.mw.log.warn = vi.fn();
+			global.agGrid.ValidationModule = {};
+			global.agGrid.ModuleRegistry = {
+				registerModules: () => {
+					throw new Error( 'ModuleRegistry is not a function' );
+				}
+			};
+			window.agGrid = global.agGrid;
+			await expect( loadAgGrid() ).resolves.toBeUndefined();
+			expect( global.mw.log.warn ).toHaveBeenCalled();
+		} );
+	} );
+
 	function makeRoot( n ) {
 		const root = document.createElement( 'div' );
 		for ( let i = 0; i < n; i++ ) {
