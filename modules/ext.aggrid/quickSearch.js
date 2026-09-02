@@ -1,26 +1,12 @@
-// Built-in opt-in quick-search box (issue #21): a toolbar emulating AG Grid
-// Enterprise's Quick Access Toolbar (`toolbar` gridOption + agQuickFilterToolbarItem),
-// whose component is absent from the Community bundle. The bundle still paints the
-// magnifier (the .ag-icon-search mask ships with the icon CSS), but the structural
-// .ag-toolbar* rules are emitted only with the Enterprise component, so the layout
-// lives in ext.aggrid.less (.ext-aggrid-toolbar), built from the --ag-* variables.
-// The toolbar is inserted INSIDE the grid's .ag-root-wrapper so those variables
-// (mapped from Codex tokens by theme.js, light-dark() values) are in scope — the box
-// matches the grid theme and follows dark mode. The box itself is row-model agnostic:
-// setup() takes an onApply callback, so client grids drive AG Grid's quickFilterText
-// while backend grids route the term to the server (the quick filter is
-// client-model-only; mountBackend injects the server path).
+// Built-in opt-in quick-search box (issue #21), as one toolbar item; the container is
+// toolbar.js's job. The box is row-model agnostic: buildItem() takes an onApply
+// callback, so client grids drive AG Grid's quickFilterText while backend grids route
+// the term to the server (the quick filter is client-model-only).
+
+const { setClass } = require( './toolbar.js' );
 
 const DEFAULT_DEBOUNCE_MS = 200;
 const MAX_DEBOUNCE_MS = 5000;
-
-// Assign a class string. Centralised so the AG Grid theme classes we reuse (ag-*) and
-// our own ext-aggrid-toolbar* hooks are set in one place; assigning via a variable also
-// keeps the class-doc lint (which only inspects string literals) satisfied.
-function setClass( el, classes ) {
-	el.className = classes;
-	return el;
-}
 
 /**
  * Trailing-edge debounce. A zero/absent wait returns fn unwrapped, so an
@@ -68,28 +54,19 @@ function normalize( raw ) {
 }
 
 /**
- * Build the quick-search toolbar inside the grid's root wrapper and wire it to the
- * quick filter. Called by mountGrid after createGrid and before gridReady fires, so
- * hook subscribers observe the final grid chrome (a gadget can detect
- * .ext-aggrid-toolbar and skip wiring its own search box).
+ * Build the quick-search item and wire it to the quick filter.
  *
- * @param {HTMLElement} el The .ext-aggrid container (post-createGrid).
+ * A gadget detecting the built-in box must look for .ext-aggrid-toolbar__search, not
+ * .ext-aggrid-toolbar — the toolbar is shared with the expand button.
+ *
  * @param {Object} api The AG Grid GridApi.
  * @param {Object} config Normalized config from normalize().
  * @param {Function} [onApply] Called with the current value on each (debounced) change
- *   and on Escape-clear. Defaults to AG Grid's client-side quick filter
- *   (`setGridOption('quickFilterText', value)`); backend grids inject a handler that
- *   routes the term to the server instead (the quick filter is client-model-only).
+ *   and on Escape-clear. Defaults to `setGridOption('quickFilterText', value)`;
+ *   backend grids inject a handler that routes the term to the server instead.
+ * @return {HTMLElement} The toolbar item.
  */
-function setup( el, api, config, onApply ) {
-	const rootWrapper = el.querySelector( '.ag-root-wrapper' );
-	if ( !rootWrapper ) {
-		mw.log.warn( '[ext.aggrid] quickSearch: no .ag-root-wrapper to attach the toolbar to' );
-		return;
-	}
-
-	const toolbar = setClass( document.createElement( 'div' ), 'ag-toolbar ext-aggrid-toolbar' );
-	toolbar.setAttribute( 'role', 'toolbar' );
+function buildItem( api, config, onApply ) {
 	const item = setClass( document.createElement( 'div' ),
 		'ag-toolbar-item ag-toolbar-input ext-aggrid-toolbar__search' );
 	const icon = setClass( document.createElement( 'span' ),
@@ -118,13 +95,16 @@ function setup( el, api, config, onApply ) {
 		if ( e.key === 'Escape' && input.value !== '' ) {
 			input.value = '';
 			apply( '' );
+			// Clearing the box consumes the key. Without this the same Escape also
+			// reaches an enclosing expand dialog and collapses the grid, losing the
+			// view the reader was only trying to reset.
+			e.preventDefault();
 		}
 	} );
 
 	item.appendChild( icon );
 	item.appendChild( input );
-	toolbar.appendChild( item );
-	rootWrapper.insertBefore( toolbar, rootWrapper.firstChild );
+	return item;
 }
 
-module.exports = { normalize, setup };
+module.exports = { normalize, buildItem };

@@ -300,12 +300,15 @@ For a global quick-search box you usually don't need the hook — set the
 `quickSearch` gridOption in Lua and the extension renders a built-in, localised one.
 If your gadget wires its own search UI, skip grids that already have the built-in box
 (it is in the DOM by the time the hook fires; note the `gridOptions` handed to the
-hook no longer carries `quickSearch` — it is consumed before the grid is created,
-like `colDef.format` — so detect via the DOM, not the options):
+hook no longer carries `quickSearch` or `expand` — both are consumed before the grid
+is created, like `colDef.format` — so detect via the DOM, not the options).
+
+Detect the **search box** specifically, not the toolbar: `.ext-aggrid-toolbar` is the
+shared container, and a grid with only `expand` enabled has one too.
 
 ```javascript
 mw.hook( 'ext.aggrid.gridReady' ).add( ( api, el, gridOptions ) => {
-    if ( el.querySelector( '.ext-aggrid-toolbar' ) ) {
+    if ( el.querySelector( '.ext-aggrid-toolbar__search' ) ) {
         return; // this grid opted into the built-in quickSearch box
     }
     const search = document.createElement( 'input' );

@@ -15,5 +15,8 @@
 	"aggrid-setfilter-partial": "Showing partial values",
 	"aggrid-setfilter-values-error": "Could not load filter values.",
 	"aggrid-quicksearch-placeholder": "Search…",
-	"aggrid-quicksearch-label": "Search the table"
+	"aggrid-quicksearch-label": "Search the table",
+	"aggrid-expand-label": "Expand table",
+	"aggrid-expand-collapse-label": "Collapse table",
+	"aggrid-expand-dialog-label": "Expanded table view"
 }
