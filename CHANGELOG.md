@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.6.0](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/compare/v0.5.1...v0.6.0) (2026-09-02)
+
+
+### Features
+
+* **expand:** full-window view for wide grids ([c1b70ee](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/c1b70eea63afa1d17a3152f445e0214064aa6665))
+
+
+### Bug Fixes
+
+* **deps:** bump ag-grid-community from 36.0.2 to 36.1.0 ([e7f61ef](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/e7f61efae7387bb104f3e4f820cda309f15a2ff3))
+
+
+### Miscellaneous Chores
+
+* **loader:** register AG Grid's ValidationModule in debug mode ([f0dafbd](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/f0dafbde4163bfa0662e22fda1182ba6c4f391ad))
+
 ## [0.5.1](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/compare/v0.5.0...v0.5.1) (2026-08-05)
 
 
