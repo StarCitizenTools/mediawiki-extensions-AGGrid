@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/compare/v0.6.0...v0.6.1) (2026-09-02)
+
+
+### Bug Fixes
+
+* **expand:** keep the grid flush with the expanded view ([34c489c](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/34c489cdc3d987ba7eb7309005cb4db1c26a9708))
+
 ## [0.6.0](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/compare/v0.5.1...v0.6.0) (2026-09-02)
 
 
