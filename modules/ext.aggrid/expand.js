@@ -24,6 +24,44 @@ const SCROLL_KEYS = {
 };
 const BACKWARD_KEYS = /^(PageUp|ArrowUp|Home|ArrowLeft)$/;
 
+// Geometry forced on every box the dialog builds: the replayed ancestors and the host
+// they wrap. Each carries a real element's classes so the wiki's selectors keep
+// matching, but it is scaffolding, not a box — and the chain is pinned to the dialog's
+// height, so anything a wiki rule adds around it, or clamps it to, ends up outside the
+// dialog's `overflow: hidden`. A 16px content margin was enough to clip away AG Grid's
+// horizontal scrollbar; a max-height would cap the window-filling view instead.
+//
+// Layout only, deliberately: the inherited properties the chain exists to carry —
+// colour, font, direction — are left to the wiki's rules.
+//
+// Inline !important is the only declaration that outranks a wiki rule of unknown
+// specificity, which may itself be !important.
+const FLAT_BOX = {
+	height: '100%',
+	'min-height': '0',
+	'max-height': 'none',
+	width: 'auto',
+	'max-width': 'none',
+	display: 'block',
+	float: 'none',
+	margin: '0',
+	padding: '0',
+	border: '0'
+};
+
+/**
+ * Force FLAT_BOX on an element.
+ *
+ * @param {HTMLElement} el
+ * @return {HTMLElement} el, for chaining.
+ */
+function flatten( el ) {
+	Object.entries( FLAT_BOX ).forEach( ( [ property, value ] ) => {
+		el.style.setProperty( property, value, 'important' );
+	} );
+	return el;
+}
+
 // Every open expansion, so a page re-render can collapse them all before the
 // placeholders it is about to replace are torn out from under them.
 const openStates = new Set();
@@ -217,11 +255,7 @@ function replayAncestors( el, host ) {
 	}
 	let inner = host;
 	classes.forEach( ( className ) => {
-		const wrapper = setClass( document.createElement( 'div' ), className );
-		// Every layer has to pass the dialog's full height down to the grid, over any
-		// wiki rule that sized the original — hence !important at each step, as on the
-		// host itself.
-		wrapper.style.setProperty( 'height', '100%', 'important' );
+		const wrapper = flatten( setClass( document.createElement( 'div' ), className ) );
 		wrapper.appendChild( inner );
 		inner = wrapper;
 	} );
@@ -366,10 +400,10 @@ function open( state ) {
 	const root = getOverlayRoot();
 	const dialog = setClass( document.createElement( 'dialog' ), DIALOG_CLASS );
 	dialog.setAttribute( 'aria-label', mw.msg( 'aggrid-expand-dialog-label' ) );
-	const host = setClass( document.createElement( 'div' ), HOST_CLASS );
-	// Inline !important is the only declaration that outranks a wiki height rule of
-	// unknown specificity, which may itself be !important.
-	host.style.setProperty( 'height', '100%', 'important' );
+	// The host is a child of the innermost replayed wrapper, so a wiki's structural
+	// selector (`.mw-parser-output .ext-aggrid > div`) reaches it exactly as it reaches
+	// them; it gets the same flattening. See FLAT_BOX.
+	const host = flatten( setClass( document.createElement( 'div' ), HOST_CLASS ) );
 
 	// Read before the move: a page whose content direction differs from the document's
 	// would otherwise flip, the dialog being outside the content wrapper.

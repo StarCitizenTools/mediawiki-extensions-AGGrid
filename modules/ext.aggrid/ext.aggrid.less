@@ -178,9 +178,22 @@
 	}
 }
 
-// The expanded view. Colours come from Codex tokens rather than the --ag-* variables:
-// those are in scope only inside .ag-root-wrapper, a descendant of the host below.
+// The expanded view. The dialog's own colours come from Codex tokens: the --ag-*
+// variables are defined further down, on the theme's styled roots inside the host, so
+// there is nothing here to read. Setting them is another matter — custom properties
+// inherit, and AG Grid builds an ancestor override in on purpose (see below).
 .ext-aggrid-expand {
+	// The view is the window, so the grid's card treatment has nothing left to frame:
+	// its border and corners would only trace the viewport's own edge, with the backdrop
+	// showing through the corners.
+	//
+	// Set as theme variables rather than as an override on .ag-root-wrapper because the
+	// Theming API routes every param through an inherited slot for exactly this: the
+	// outer styled root copies whatever it inherits into `--ag-inherited-wrapper-border`,
+	// and the params class emits `var( --ag-inherited-wrapper-border, <default> )`. Both
+	// rules are :where(), so specificity never comes into it — an ancestor simply wins.
+	--ag-wrapper-border: none;
+	--ag-wrapper-border-radius: 0;
 	// Override the UA's fit-content sizing, border, padding and canvas background.
 	width: 100%;
 	max-width: 100%;

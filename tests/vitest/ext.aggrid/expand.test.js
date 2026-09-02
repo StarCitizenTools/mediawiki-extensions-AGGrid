@@ -32,6 +32,43 @@ function makeMounted() {
 	return { el, root };
 }
 
+// The same, wrapped in the ancestors a wiki puts a grid in: the content wrapper
+// TemplateStyles is force-prefixed with, and an author's own wrapper below it.
+function makeNested() {
+	const { el, root } = makeMounted();
+	const content = document.createElement( 'div' );
+	content.className = 'mw-content-ltr mw-parser-output';
+	const wrapper = document.createElement( 'div' );
+	wrapper.className = 't-datagrid';
+	content.appendChild( wrapper );
+	wrapper.appendChild( el );
+	document.body.appendChild( content );
+	return { el, root };
+}
+
+// Every declaration flatten() forces, as the DOM reports it back.
+const FLAT_BOX = {
+	height: '100%',
+	'min-height': '0px',
+	'max-height': 'none',
+	width: 'auto',
+	'max-width': 'none',
+	display: 'block',
+	float: 'none',
+	margin: '0px',
+	padding: '0px',
+	border: '0px'
+};
+
+function expectFlattened( el ) {
+	Object.entries( FLAT_BOX ).forEach( ( [ property, value ] ) => {
+		expect( [ property, el.style.getPropertyValue( property ) ] )
+			.toEqual( [ property, value ] );
+		expect( [ property, el.style.getPropertyPriority( property ) ] )
+			.toEqual( [ property, 'important' ] );
+	} );
+}
+
 function makeApi() {
 	return { destroy: vi.fn() };
 }
@@ -158,19 +195,7 @@ describe( 'expanding and collapsing', () => {
 		// A wiki's rules are scoped through the content wrapper — TemplateStyles is
 		// always force-prefixed with .mw-parser-output — so leaving page content would
 		// otherwise drop all of them.
-		const content = document.createElement( 'div' );
-		content.className = 'mw-content-ltr mw-parser-output';
-		const wrapper = document.createElement( 'div' );
-		wrapper.className = 't-datagrid';
-		const el = document.createElement( 'div' );
-		el.className = 'ext-aggrid';
-		const root = document.createElement( 'div' );
-		root.className = 'ag-root-wrapper';
-		el.appendChild( root );
-		wrapper.appendChild( el );
-		content.appendChild( wrapper );
-		document.body.appendChild( content );
-
+		const { el, root } = makeNested();
 		const item = expand.buildItem( el, makeApi(), { label: null } );
 		root.appendChild( item );
 		openVia( item );
@@ -190,19 +215,35 @@ describe( 'expanding and collapsing', () => {
 		// Classes only: nothing that could duplicate a real element's identity.
 		const replayed = document.querySelector( 'dialog .t-datagrid' );
 		expect( replayed.id ).toBe( '' );
-		// Every layer passes the dialog's height down over any wiki rule.
-		expect( replayed.style.getPropertyPriority( 'height' ) ).toBe( 'important' );
 	} );
 
-	it( 'forces the host height inline so a wiki rule cannot shrink the grid', () => {
+	it( 'flattens every box it builds, wrappers and host alike', () => {
+		// jsdom does no layout, so this can only check the declarations. What they buy:
+		// a margin on any layer moves the whole 100%-height stack down and pushes its
+		// bottom edge — where AG Grid parks the horizontal scrollbar — out under the
+		// dialog's `overflow: hidden`; a max-height caps the window-filling view.
+		const { el, root } = makeNested();
+		const item = expand.buildItem( el, makeApi(), { label: null } );
+		root.appendChild( item );
+		openVia( item );
+
+		[
+			'mw-parser-output',
+			't-datagrid',
+			'ext-aggrid',
+			'ext-aggrid-expand__host'
+		].forEach( ( className ) => {
+			expectFlattened( document.querySelector( `dialog .${ className }` ) );
+		} );
+	} );
+
+	it( 'flattens the host even with no ancestors to replay', () => {
 		const { el, root } = makeMounted();
 		const item = expand.buildItem( el, makeApi(), { label: null } );
 		root.appendChild( item );
 		openVia( item );
 
-		const host = document.querySelector( '.ext-aggrid-expand__host' );
-		expect( host.style.getPropertyValue( 'height' ) ).toBe( '100%' );
-		expect( host.style.getPropertyPriority( 'height' ) ).toBe( 'important' );
+		expectFlattened( document.querySelector( '.ext-aggrid-expand__host' ) );
 	} );
 
 	it( 'swaps the button to its collapse state and back', () => {
