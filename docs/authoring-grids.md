@@ -53,6 +53,25 @@ Grids match your wiki's skin automatically — colours follow the active skin's 
 scheme with no configuration. To use a different look, set the standard AG Grid `theme` option;
 see [AG Grid theming](https://www.ag-grid.com/javascript-data-grid/theming/).
 
+## The full-window view
+
+Wide grids rarely fit a wiki's content column. Set `expand = true` to add a button for an
+expanded view that fills the browser window.
+
+```lua
+mw.ext.aggrid.render{
+    columnDefs = { --[[ … ]] },
+    rowData = { --[[ … ]] },
+    expand = true,
+}
+```
+
+Pass a table to override the button's label:
+
+```lua
+expand = { label = 'Open full width' },
+```
+
 ## Limits
 
 Inline `rowData` is capped at **5,000 rows**. For larger datasets, use a
@@ -64,6 +83,13 @@ REST endpoint rather than written into the page HTML.
 | Function | Returns | Description |
 | --- | --- | --- |
 | `mw.ext.aggrid.render( gridOptions )` | wikitext | Renders a grid. Pass either `columnDefs` + `rowData` (inline) or a [`source`](data-sources.md) descriptor. |
+
+Beyond AG Grid's own options, `gridOptions` accepts these additional ones:
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `expand` | boolean \| table | `false` | Full-window view button. `{ label = '…' }` overrides its label. |
+| `quickSearch` | boolean \| table | `false` | [Quick-search box](filters.md). `{ placeholder = '…', debounceMs = 300 }`. |
 
 ## See also
 

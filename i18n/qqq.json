@@ -15,5 +15,8 @@
 	"aggrid-setfilter-partial": "Note shown below the set-filter value list when the server returned only a partial list of values (e.g. capped for performance). Informs the user that not all possible values may be shown.",
 	"aggrid-setfilter-values-error": "Error message shown in the set filter popup when fetching the list of values from the server failed.",
 	"aggrid-quicksearch-placeholder": "Placeholder text in the quick-search box shown above a data grid when the page author enables the quickSearch grid option. Typing in the box filters the grid's rows across all columns.",
-	"aggrid-quicksearch-label": "ARIA label (for screen readers) of the quick-search input shown above a data grid when the page author enables the quickSearch grid option."
+	"aggrid-quicksearch-label": "ARIA label (for screen readers) of the quick-search input shown above a data grid when the page author enables the quickSearch grid option.",
+	"aggrid-expand-label": "Accessible name and tooltip of the button that opens a data grid in a full-window view, shown above the grid when the page author enables the expand grid option. Used while the grid is not expanded. See also {{msg-mw|aggrid-expand-collapse-label}}.",
+	"aggrid-expand-collapse-label": "Accessible name and tooltip of the same button once the grid is expanded, when pressing it returns the grid to the page. See also {{msg-mw|aggrid-expand-label}}.",
+	"aggrid-expand-dialog-label": "Accessible name of the dialog holding the expanded data grid, announced by screen readers when it opens."
 }

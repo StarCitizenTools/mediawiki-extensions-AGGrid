@@ -301,6 +301,91 @@ describe( 'mountGrid', () => {
 		expect( off.querySelector( '.ext-aggrid-toolbar' ) ).toBeNull();
 	} );
 
+	// expand.buildItem() feature-detects showModal, which jsdom does not implement;
+	// without this the button is (correctly) never built and these tests would pass
+	// vacuously. See expand.test.js for the same stub and what it does not prove.
+	function stubDialogSupport() {
+		HTMLDialogElement.prototype.showModal = function () {
+			this.setAttribute( 'open', '' );
+		};
+		HTMLDialogElement.prototype.close = function () {
+			this.removeAttribute( 'open' );
+		};
+		return () => {
+			delete HTMLDialogElement.prototype.showModal;
+			delete HTMLDialogElement.prototype.close;
+		};
+	}
+
+	it( 'consumes expand and builds the button before gridReady fires', () => {
+		const restore = stubDialogSupport();
+		stubCreateGridWithRootWrapper();
+		let buttonAtFire = null;
+		global.mw.hook = vi.fn( ( name ) => ( {
+			fire: vi.fn( ( api, gridEl ) => {
+				if ( name === 'ext.aggrid.gridReady' ) {
+					buttonAtFire = gridEl.querySelector( '.ext-aggrid-toolbar__button' );
+				}
+			} )
+		} ) );
+
+		const el = makeEl( '{"columnDefs":[],"rowData":[],"expand":true}' );
+		mountGrid( el );
+
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		// Consumed before createGrid — AG Grid warns about unknown gridOptions keys.
+		expect( 'expand' in opts ).toBe( false );
+		expect( buttonAtFire ).not.toBeNull();
+
+		delete global.mw.hook;
+		restore();
+	} );
+
+	it( 'puts the expand button after the search box, aligned to the trailing edge', () => {
+		const restore = stubDialogSupport();
+		stubCreateGridWithRootWrapper();
+		const el = makeEl( '{"columnDefs":[],"rowData":[],"quickSearch":true,"expand":true}' );
+		mountGrid( el );
+
+		const items = Array.from( el.querySelector( '.ext-aggrid-toolbar' ).children );
+		expect( items ).toHaveLength( 2 );
+		expect( items[ 0 ].classList.contains( 'ext-aggrid-toolbar__search' ) ).toBe( true );
+		expect( items[ 1 ].querySelector( '.ext-aggrid-toolbar__button' ) ).not.toBeNull();
+		expect( items[ 1 ].classList.contains( 'ext-aggrid-toolbar__item--end' ) ).toBe( true );
+		restore();
+	} );
+
+	it( 'shares one toolbar between both controls', () => {
+		const restore = stubDialogSupport();
+		stubCreateGridWithRootWrapper();
+		const el = makeEl( '{"columnDefs":[],"rowData":[],"quickSearch":true,"expand":true}' );
+		mountGrid( el );
+		expect( el.querySelectorAll( '.ext-aggrid-toolbar' ) ).toHaveLength( 1 );
+		restore();
+	} );
+
+	it( 'builds no toolbar when expand is absent or false', () => {
+		const restore = stubDialogSupport();
+		stubCreateGridWithRootWrapper();
+		const off = makeEl( '{"columnDefs":[],"rowData":[],"expand":false}' );
+		mountGrid( off );
+		expect( off.querySelector( '.ext-aggrid-toolbar' ) ).toBeNull();
+		restore();
+	} );
+
+	it( 'builds the expand button on the backend path', () => {
+		const restore = stubDialogSupport();
+		stubBackendCreateGrid();
+		const el = makeBackendEl( '{"columnDefs":[{"field":"n"}],"expand":true}' );
+		mountGrid( el );
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		// Unlike quickSearch there is no backend capability gate: the control only
+		// moves the grid's own DOM, so it works on every row model.
+		expect( 'expand' in opts ).toBe( false );
+		expect( el.querySelector( '.ext-aggrid-toolbar__button' ) ).not.toBeNull();
+		restore();
+	} );
+
 	it( 'builds the quick-search toolbar on the backend path', () => {
 		stubBackendCreateGrid();
 		mockRest( vi.fn().mockResolvedValue( { rows: [], total: 0 } ) );
@@ -346,14 +431,18 @@ describe( 'mountGrid', () => {
 	} );
 
 	it( 'builds no toolbar on the error mount path', () => {
+		const restore = stubDialogSupport();
 		stubCreateGridWithRootWrapper();
 		// No rowData and no fetch handle → error mount.
-		const el = makeEl( '{"columnDefs":[{"field":"name"}],"quickSearch":true}' );
+		const el = makeEl( '{"columnDefs":[{"field":"name"}],"quickSearch":true,"expand":true}' );
 		mountGrid( el );
 
 		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
 		expect( 'quickSearch' in opts ).toBe( false );
+		// A button that expands a grid which could not load its rows is a dead control.
+		expect( 'expand' in opts ).toBe( false );
 		expect( el.querySelector( '.ext-aggrid-toolbar' ) ).toBeNull();
+		restore();
 	} );
 
 	it( 'builds the toolbar on the REST-fetch inline path once rows arrive', async () => {

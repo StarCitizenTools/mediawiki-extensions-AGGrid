@@ -114,6 +114,8 @@
 				"ext.aggrid/format.js",
 				"ext.aggrid/setFilter.js",
 				"ext.aggrid/quickSearch.js",
+				"ext.aggrid/toolbar.js",
+				"ext.aggrid/expand.js",
 				{
 					"name": "ext.aggrid/bundle.json",
 					"callback": "MediaWiki\\Extension\\AGGrid\\ResourceLoader\\Bundle::makePackageFile",
@@ -121,7 +123,8 @@
 				}
 			],
 			"dependencies": [
-				"mediawiki.api"
+				"mediawiki.api",
+				"mediawiki.page.ready"
 			],
 			"messages": [
 				"aggrid-error-load",
@@ -132,7 +135,10 @@
 				"aggrid-setfilter-partial",
 				"aggrid-setfilter-values-error",
 				"aggrid-quicksearch-placeholder",
-				"aggrid-quicksearch-label"
+				"aggrid-quicksearch-label",
+				"aggrid-expand-label",
+				"aggrid-expand-collapse-label",
+				"aggrid-expand-dialog-label"
 			]
 		}
 	},

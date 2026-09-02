@@ -48,6 +48,7 @@ class LuaLibrary extends LibraryBase {
 		$this->checkType( 'mw.ext.aggrid.render', 1, $gridOptions, 'table' );
 
 		$this->validateQuickSearch( $gridOptions['quickSearch'] ?? null );
+		$this->validateExpand( $gridOptions['expand'] ?? null );
 
 		// A `source` descriptor routes to the backend path (query stored, not rows).
 		if ( isset( $gridOptions['source'] ) ) {
@@ -141,6 +142,39 @@ class LuaLibrary extends LibraryBase {
 			} else {
 				throw new LuaError(
 					'mw.ext.aggrid.render: unknown quickSearch key "' . $key . '"'
+				);
+			}
+		}
+	}
+
+	/**
+	 * Validate the expand gridOption: boolean, or a table with an optional `label`
+	 * (string) key. Unknown keys are rejected to catch typos, and an invalid shape
+	 * throws rather than being gated away — see validateQuickSearch. An empty table is
+	 * indistinguishable from an empty list and is allowed (the client reads it as true).
+	 *
+	 * @param mixed $expand
+	 * @throws LuaError If the shape is invalid.
+	 */
+	private function validateExpand( $expand ): void {
+		if ( $expand === null || is_bool( $expand ) ) {
+			return;
+		}
+		if ( !is_array( $expand ) ) {
+			throw new LuaError(
+				'mw.ext.aggrid.render: expand must be a boolean or a table'
+			);
+		}
+		foreach ( $expand as $key => $value ) {
+			if ( $key === 'label' ) {
+				if ( !is_string( $value ) ) {
+					throw new LuaError(
+						'mw.ext.aggrid.render: expand.label must be a string'
+					);
+				}
+			} else {
+				throw new LuaError(
+					'mw.ext.aggrid.render: unknown expand key "' . $key . '"'
 				);
 			}
 		}

@@ -59,7 +59,12 @@ end
 ---    (integer/double); there is no text 'contains' filter and no quick search,
 ---    because Bucket's query language has no LIKE operator.
 ---
---- The extension also understands one non-AG-Grid gridOption:
+--- The extension also understands these non-AG-Grid gridOptions:
+---  * expand      boolean|table @opt-in button in the grid's toolbar that opens the
+---                 grid in a full-window view, for wide grids in a narrow content
+---                 column. `true` enables it with an i18n label; a table overrides:
+---                 { label = 'Open full width' }. Works on every grid kind. The button
+---                 is omitted where the browser cannot show a modal dialog.
 ---  * quickSearch boolean|table @opt-in quick-search box above the grid rows,
 ---                 wired to AG Grid's quick filter. `true` enables it with an
 ---                 i18n placeholder and a 200 ms debounce; a table overrides:

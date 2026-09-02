@@ -1,4 +1,16 @@
-const { normalize, setup } = require( '../../../modules/ext.aggrid/quickSearch.js' );
+const { normalize, buildItem } = require( '../../../modules/ext.aggrid/quickSearch.js' );
+const toolbar = require( '../../../modules/ext.aggrid/toolbar.js' );
+
+// The wiring mountGrid does around buildItem: ensure the toolbar container exists,
+// then append the item to it. Kept here so these tests exercise the box in the DOM
+// position it actually occupies.
+function setup( el, api, config, onApply ) {
+	const bar = toolbar.ensure( el );
+	if ( !bar ) {
+		return;
+	}
+	toolbar.addItem( bar, buildItem( api, config, onApply ) );
+}
 
 describe( 'normalize', () => {
 	it( 'enables with defaults for true', () => {
@@ -57,15 +69,17 @@ describe( 'setup', () => {
 	it( 'inserts the toolbar as the first child of .ag-root-wrapper', () => {
 		const { el, root, body } = makeMounted();
 		setup( el, makeApi(), DEFAULTS );
-		const toolbar = root.firstChild;
-		expect( toolbar.classList.contains( 'ag-toolbar' ) ).toBe( true );
-		expect( toolbar.classList.contains( 'ext-aggrid-toolbar' ) ).toBe( true );
-		expect( toolbar.getAttribute( 'role' ) ).toBe( 'toolbar' );
-		expect( toolbar.nextSibling ).toBe( body );
+		const bar = root.firstChild;
+		expect( bar.classList.contains( 'ag-toolbar' ) ).toBe( true );
+		expect( bar.classList.contains( 'ext-aggrid-toolbar' ) ).toBe( true );
+		// Deliberately no role="toolbar": it promises roving-tabindex arrow-key
+		// navigation we do not implement, over a text input that needs the arrows.
+		expect( bar.getAttribute( 'role' ) ).toBeNull();
+		expect( bar.nextSibling ).toBe( body );
 		// The Enterprise Quick Access Toolbar DOM shape the theme CSS expects.
-		expect( toolbar.querySelector( '.ag-toolbar-item.ag-toolbar-input' ) ).not.toBeNull();
-		expect( toolbar.querySelector( '.ag-toolbar-input-icon .ag-icon-search' ) ).not.toBeNull();
-		expect( toolbar.querySelector( 'input.ag-toolbar-input-field' ) ).not.toBeNull();
+		expect( bar.querySelector( '.ag-toolbar-item.ag-toolbar-input' ) ).not.toBeNull();
+		expect( bar.querySelector( '.ag-toolbar-input-icon .ag-icon-search' ) ).not.toBeNull();
+		expect( bar.querySelector( 'input.ag-toolbar-input-field' ) ).not.toBeNull();
 	} );
 
 	it( 'is a logged no-op when there is no .ag-root-wrapper', () => {
@@ -136,11 +150,25 @@ describe( 'setup', () => {
 		vi.advanceTimersByTime( 200 );
 		api.setGridOption.mockClear();
 
-		input.dispatchEvent( new window.KeyboardEvent( 'keydown', { key: 'Escape' } ) );
+		const escape = new window.KeyboardEvent( 'keydown', { key: 'Escape', cancelable: true } );
+		input.dispatchEvent( escape );
 		expect( input.value ).toBe( '' );
+		// Clearing the box consumes the key, so an enclosing expand dialog does not
+		// also collapse on the same Escape.
+		expect( escape.defaultPrevented ).toBe( true );
 		vi.advanceTimersByTime( 200 );
 		expect( api.setGridOption ).toHaveBeenCalledWith( 'quickFilterText', '' );
 		vi.useRealTimers();
+	} );
+
+	it( 'lets Escape through when the box is already empty', () => {
+		const { el } = makeMounted();
+		setup( el, makeApi(), DEFAULTS );
+		const input = el.querySelector( '.ext-aggrid-toolbar__input' );
+		const escape = new window.KeyboardEvent( 'keydown', { key: 'Escape', cancelable: true } );
+		input.dispatchEvent( escape );
+		// Nothing to clear, so the key belongs to whatever encloses the grid.
+		expect( escape.defaultPrevented ).toBe( false );
 	} );
 
 	it( 'calls a provided onApply instead of setGridOption(quickFilterText)', () => {
