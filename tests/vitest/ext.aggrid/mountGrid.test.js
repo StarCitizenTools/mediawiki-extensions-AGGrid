@@ -26,6 +26,31 @@ describe( 'parseConfig', () => {
 	it( 'returns null for invalid JSON', () => {
 		expect( parseConfig( makeEl( '{not json' ) ) ).toBeNull();
 	} );
+
+	it( 'strips the options AG Grid would render as HTML', () => {
+		// Mirrors the server-side strip, for parser-cached pages.
+		const el = makeEl( JSON.stringify( {
+			overlayNoRowsTemplate: '<img src=x onerror=alert(1)>',
+			icons: { menu: '<img src=x onerror=alert(1)>' },
+			columnDefs: [ {
+				field: 'a',
+				headerComponentParams: { template: '<div onclick="alert(1)"></div>', label: 'A' }
+			} ],
+			rowData: []
+		} ) );
+		expect( parseConfig( el ) ).toEqual( {
+			columnDefs: [ { field: 'a', headerComponentParams: { label: 'A' } } ],
+			rowData: []
+		} );
+	} );
+
+	it( 'leaves rowData cell fields that share a stripped name', () => {
+		const el = makeEl( JSON.stringify( {
+			columnDefs: [ { field: 'template' } ],
+			rowData: [ { template: 'Standard', icons: 'none' } ]
+		} ) );
+		expect( parseConfig( el ).rowData ).toEqual( [ { template: 'Standard', icons: 'none' } ] );
+	} );
 } );
 
 describe( 'mountGrid', () => {

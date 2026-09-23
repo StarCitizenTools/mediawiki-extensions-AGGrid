@@ -50,6 +50,36 @@ class GridRendererTest extends MediaWikiIntegrationTestCase {
 		$this->assertStringNotContainsString( 'data-mw-aggrid-rev', $html );
 	}
 
+	public function testStripsHtmlOptionsFromThePlaceholder(): void {
+		$po = new ParserOutput();
+		$html = $this->getRenderer()->render( [
+			'columnDefs' => [ [ 'field' => 'name', 'icons' => [ 'menu' => '<img src=x onerror=alert(1)>' ] ] ],
+			'rowData' => [ [ 'name' => 'Aurora' ] ],
+			'overlayNoRowsTemplate' => '<img src=x onerror=alert(1)>',
+		], $po, 7, 42, false );
+
+		$this->assertStringNotContainsString( 'onerror', $html );
+		$decoded = $this->decodeOptions( $html );
+		$this->assertArrayNotHasKey( 'overlayNoRowsTemplate', $decoded );
+		$this->assertArrayNotHasKey( 'icons', $decoded['columnDefs'][0] );
+		$this->assertSame( 'name', $decoded['columnDefs'][0]['field'] );
+	}
+
+	public function testStripsHtmlOptionsFromAPreviewPlaceholder(): void {
+		// Preview embeds rowData inline; a cell field sharing a stripped name is data.
+		$po = new ParserOutput();
+		$html = $this->getRenderer()->render( [
+			'columnDefs' => [ [ 'field' => 'template' ] ],
+			'rowData' => [ [ 'template' => 'Standard' ] ],
+			'overlayLoadingTemplate' => '<img src=x onerror=alert(1)>',
+		], $po, 7, 42, true );
+
+		$this->assertStringNotContainsString( 'onerror', $html );
+		$decoded = $this->decodeOptions( $html );
+		$this->assertArrayNotHasKey( 'overlayLoadingTemplate', $decoded );
+		$this->assertSame( 'Standard', $decoded['rowData'][0]['template'], 'cell data kept' );
+	}
+
 	public function testSecondGridGetsNextIndex(): void {
 		$po = new ParserOutput();
 		$this->getRenderer()->render( $this->options(), $po, 7, 42, false );
