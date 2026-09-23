@@ -17,6 +17,27 @@ const BLOCK_SIZE = 50;
 // firing on initial + re-rendered content) never call createGrid twice on it.
 const INIT_CLASS = 'ext-aggrid--init';
 
+// Mirror of GridOptionSanitizer.php, for pages still served from the parser cache (their
+// stored HTML predates the fix). Keep both lists in step when the AG Grid bundle is bumped.
+const HTML_OPTION_KEYS = [ 'overlayNoRowsTemplate', 'overlayLoadingTemplate', 'icons', 'template' ];
+
+/**
+ * Recursively remove the HTML-string option keys, leaving rowData untouched.
+ *
+ * @param {Object} options
+ * @return {Object} options, mutated in place.
+ */
+function stripHtmlOptions( options ) {
+	HTML_OPTION_KEYS.forEach( ( key ) => delete options[ key ] );
+	Object.keys( options ).forEach( ( key ) => {
+		const value = options[ key ];
+		if ( key !== 'rowData' && value && typeof value === 'object' ) {
+			stripHtmlOptions( value );
+		}
+	} );
+	return options;
+}
+
 /**
  * Read and parse the gridOptions carried in the placeholder's config attribute.
  *
@@ -29,7 +50,7 @@ function parseConfig( el ) {
 		return null;
 	}
 	try {
-		return JSON.parse( raw );
+		return stripHtmlOptions( JSON.parse( raw ) );
 	} catch ( e ) {
 		mw.log.error( '[ext.aggrid] Failed to parse grid config', e );
 		return null;

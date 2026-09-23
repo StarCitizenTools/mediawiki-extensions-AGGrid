@@ -4,6 +4,7 @@ declare( strict_types=1 );
 
 namespace MediaWiki\Extension\AGGrid\Service;
 
+use MediaWiki\Extension\AGGrid\GridOptionSanitizer;
 use MediaWiki\Extension\AGGrid\LuaSequence;
 use MediaWiki\Html\TemplateParser;
 use MediaWiki\Parser\ParserOutput;
@@ -145,6 +146,8 @@ final class GridRenderer {
 	 * @return string
 	 */
 	private function buildPlaceholder( array $viewConfig, ?array $handle, ?string $source ): string {
+		// Remove options AG Grid renders as HTML — a wikitext author must not inject markup.
+		$viewConfig = GridOptionSanitizer::strip( $viewConfig );
 		$json = json_encode( $viewConfig, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE );
 		return $this->templateParser->processTemplate( 'grid', [
 			'options' => $json,
