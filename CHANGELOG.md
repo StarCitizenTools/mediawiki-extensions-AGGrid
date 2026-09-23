@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/compare/v0.6.1...v0.7.0) (2026-09-23)
+
+
+### Features
+
+* CSV export button (csvExport option) ([#87](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/issues/87)) ([4ff56df](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/4ff56df73ef7b5703a32864dd3c36cb8766a5832))
+
+
+### Bug Fixes
+
+* **deps:** bump ag-grid-community from 36.1.0 to 36.2.0 ([0947129](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/094712960b55d17bd219ef1da7ef3e02aebc29f0))
+* strip grid options that AG Grid renders as HTML ([0c37949](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/0c379499c75d365fedd70918311726b8702e89d5))
+
 ## [0.6.1](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/compare/v0.6.0...v0.6.1) (2026-09-10)
 
 
