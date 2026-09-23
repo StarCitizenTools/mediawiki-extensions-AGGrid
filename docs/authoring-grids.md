@@ -72,6 +72,24 @@ Pass a table to override the button's label:
 expand = { label = 'Open full width' },
 ```
 
+## Downloading as CSV
+
+Set `csvExport = true` to add a button that downloads the grid's rows as a CSV file, named after
+the page by default. Pass a table to override the button's label:
+
+```lua
+csvExport = { label = 'Download data' },
+```
+
+- Columns with a [`format`](formatting.md) spec export their raw values, such as `27` and
+  `2024-03-09`, rather than `27 kg` and `Mar 9, 2024`.
+- Text starting with `=`, `+`, `-` or `@` is exported with a leading `'`, so that spreadsheet
+  applications do not run it as a formula.
+- To change the file name, column separator, and similar settings, set AG Grid's
+  [`defaultCsvExportParams`](https://www.ag-grid.com/javascript-data-grid/csv-export/) option.
+
+CSV export is not available on [backend source grids](data-sources.md).
+
 ## Limits
 
 Inline `rowData` is capped at **5,000 rows**. For larger datasets, use a
@@ -88,6 +106,7 @@ Beyond AG Grid's own options, `gridOptions` accepts these additional ones:
 
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
+| `csvExport` | boolean \| table | `false` | [CSV download button](#downloading-as-csv). `{ label = '…' }` overrides its label. |
 | `expand` | boolean \| table | `false` | Full-window view button. `{ label = '…' }` overrides its label. |
 | `quickSearch` | boolean \| table | `false` | [Quick-search box](filters.md). `{ placeholder = '…', debounceMs = 300 }`. |
 

@@ -5,6 +5,7 @@ const { buildRegistry } = require( './registry.js' );
 const { makeFormatter } = require( './format.js' );
 const quickSearch = require( './quickSearch.js' );
 const expand = require( './expand.js' );
+const csvExport = require( './csvExport.js' );
 const toolbar = require( './toolbar.js' );
 
 const PLACEHOLDER_SELECTOR = '.ext-aggrid';
@@ -99,6 +100,9 @@ function applyFormatters( colDefs ) {
 				}
 			}
 			delete colDef.format;
+			// Export the raw value: a CSV is for reuse, where "27 kg" or a locale's date
+			// wording is not data. See csvExport.js.
+			colDef.useValueFormatterForExport = false;
 		}
 	} );
 }
@@ -111,8 +115,8 @@ function applyFormatters( colDefs ) {
  *
  * @param {HTMLElement} el The .ext-aggrid container.
  * @param {Object} gridOptions gridOptions to prepare in place.
- * @return {Object} Normalized chrome configs: { quickSearch, expand }, each null
- *   when that control is disabled.
+ * @return {Object} Normalized chrome configs: { quickSearch, csvExport, expand }, each
+ *   null when that control is disabled.
  */
 function prepareGridOptions( el, gridOptions ) {
 	// Apply the wiki theme unless the author already chose one.
@@ -128,13 +132,21 @@ function prepareGridOptions( el, gridOptions ) {
 	const registry = buildRegistry();
 	gridOptions.columnTypes = Object.assign( {}, gridOptions.columnTypes, registry.columnTypes );
 	gridOptions.components = Object.assign( {}, gridOptions.components, registry.components );
+	// Every grid's CSV export defaults, whether the button or a gadget starts the export;
+	// the author's own defaultCsvExportParams win.
+	gridOptions.defaultCsvExportParams = Object.assign(
+		csvExport.defaultParams( mw.config.get( 'wgTitle' ) ),
+		gridOptions.defaultCsvExportParams
+	);
 	// Consume our own gridOptions before createGrid — like colDef.format above, they are
 	// extension config, and AG Grid warns about unknown gridOptions keys.
 	const chrome = {
 		quickSearch: quickSearch.normalize( gridOptions.quickSearch ),
+		csvExport: csvExport.normalize( gridOptions.csvExport ),
 		expand: expand.normalize( gridOptions.expand )
 	};
 	delete gridOptions.quickSearch;
+	delete gridOptions.csvExport;
 	delete gridOptions.expand;
 	// AG Grid expects an empty container.
 	const skeleton = el.querySelector( '.ext-aggrid__skeleton' );
@@ -160,8 +172,11 @@ function buildChrome( el, api, chrome, makeOnQuickSearch ) {
 		const onApply = makeOnQuickSearch ? makeOnQuickSearch( api ) : undefined;
 		items.push( { el: quickSearch.buildItem( api, chrome.quickSearch, onApply ) } );
 	}
+	if ( chrome.csvExport ) {
+		items.push( { el: csvExport.buildItem( api, chrome.csvExport ), trailing: true } );
+	}
 	if ( chrome.expand ) {
-		items.push( { el: expand.buildItem( el, api, chrome.expand ), end: true } );
+		items.push( { el: expand.buildItem( el, api, chrome.expand ), trailing: true } );
 	}
 	const wanted = items.filter( ( item ) => item.el );
 	if ( !wanted.length ) {
@@ -171,7 +186,10 @@ function buildChrome( el, api, chrome, makeOnQuickSearch ) {
 	if ( !bar ) {
 		return;
 	}
-	wanted.forEach( ( item ) => toolbar.addItem( bar, item.el, { end: item.end } ) );
+	// Only the first trailing item is marked `end`: that pushes it, and everything after
+	// it, to the trailing edge.
+	const firstTrailing = wanted.find( ( item ) => item.trailing );
+	wanted.forEach( ( item ) => toolbar.addItem( bar, item.el, { end: item === firstTrailing } ) );
 }
 
 /**
@@ -229,6 +247,7 @@ function mountError( el, gridOptions ) {
 	// No toolbar on an error mount: a search box, or a button that expands an empty
 	// grid to fill the viewport, are dead controls over rows that failed to load.
 	delete gridOptions.quickSearch;
+	delete gridOptions.csvExport;
 	delete gridOptions.expand;
 	// AG Grid has no dedicated error overlay; show the message via the no-rows
 	// overlay, which is auto-shown for an empty client-side row model. The
@@ -351,6 +370,10 @@ function mountBackend( el, gridOptions ) {
 	// box to a server round-trip: typing updates state.q, resets to the first page,
 	// and purges the infinite cache so the new total and rows reload from offset 0.
 	const chrome = prepareGridOptions( el, gridOptions );
+	// No export button: the Infinite Row Model exports only the blocks it has loaded, so
+	// the file would be a partial one that looks complete. LuaLibrary already drops the
+	// option from source grids; this keeps it off whatever the placeholder carries.
+	chrome.csvExport = null;
 	// Built once the api exists (createAndAnnounce supplies it): on each apply, stash
 	// the term, jump to the first page, and purge the infinite cache so the new total
 	// and rows reload from offset 0.

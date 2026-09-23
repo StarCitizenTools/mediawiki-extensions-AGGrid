@@ -48,7 +48,8 @@ class LuaLibrary extends LibraryBase {
 		$this->checkType( 'mw.ext.aggrid.render', 1, $gridOptions, 'table' );
 
 		$this->validateQuickSearch( $gridOptions['quickSearch'] ?? null );
-		$this->validateExpand( $gridOptions['expand'] ?? null );
+		$this->validateButtonOption( 'expand', $gridOptions['expand'] ?? null );
+		$this->validateButtonOption( 'csvExport', $gridOptions['csvExport'] ?? null );
 
 		// A `source` descriptor routes to the backend path (query stored, not rows).
 		if ( isset( $gridOptions['source'] ) ) {
@@ -148,33 +149,35 @@ class LuaLibrary extends LibraryBase {
 	}
 
 	/**
-	 * Validate the expand gridOption: boolean, or a table with an optional `label`
-	 * (string) key. Unknown keys are rejected to catch typos, and an invalid shape
-	 * throws rather than being gated away — see validateQuickSearch. An empty table is
-	 * indistinguishable from an empty list and is allowed (the client reads it as true).
+	 * Validate a toolbar-button gridOption (expand, csvExport): boolean, or a table with
+	 * an optional `label` (string) key. Unknown keys are rejected to catch typos, and an
+	 * invalid shape throws rather than being gated away — see validateQuickSearch. An
+	 * empty table is indistinguishable from an empty list and is allowed (the client
+	 * reads it as true).
 	 *
-	 * @param mixed $expand
+	 * @param string $option The gridOption's name, for the error message.
+	 * @param mixed $value
 	 * @throws LuaError If the shape is invalid.
 	 */
-	private function validateExpand( $expand ): void {
-		if ( $expand === null || is_bool( $expand ) ) {
+	private function validateButtonOption( string $option, $value ): void {
+		if ( $value === null || is_bool( $value ) ) {
 			return;
 		}
-		if ( !is_array( $expand ) ) {
+		if ( !is_array( $value ) ) {
 			throw new LuaError(
-				'mw.ext.aggrid.render: expand must be a boolean or a table'
+				"mw.ext.aggrid.render: $option must be a boolean or a table"
 			);
 		}
-		foreach ( $expand as $key => $value ) {
+		foreach ( $value as $key => $item ) {
 			if ( $key === 'label' ) {
-				if ( !is_string( $value ) ) {
+				if ( !is_string( $item ) ) {
 					throw new LuaError(
-						'mw.ext.aggrid.render: expand.label must be a string'
+						"mw.ext.aggrid.render: $option.label must be a string"
 					);
 				}
 			} else {
 				throw new LuaError(
-					'mw.ext.aggrid.render: unknown expand key "' . $key . '"'
+					"mw.ext.aggrid.render: unknown $option key \"$key\""
 				);
 			}
 		}
@@ -225,6 +228,9 @@ class LuaLibrary extends LibraryBase {
 			// would be inert — drop it rather than render a dead control.
 			unset( $viewConfig['quickSearch'] );
 		}
+		// A backend grid holds only the rows it has loaded (the Infinite Row Model), so
+		// an export would be a partial file that looks complete — drop the button.
+		unset( $viewConfig['csvExport'] );
 
 		$parser = $this->getParser();
 		$parserOutput = $parser->getOutput();
