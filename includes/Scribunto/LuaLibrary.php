@@ -228,8 +228,8 @@ class LuaLibrary extends LibraryBase {
 			// would be inert — drop it rather than render a dead control.
 			unset( $viewConfig['quickSearch'] );
 		}
-		// A backend grid holds only the rows it has loaded (the Infinite Row Model), so
-		// an export would be a partial file that looks complete — drop the button.
+		// The Infinite Row Model exports only the blocks it has loaded: a partial file
+		// that looks complete.
 		unset( $viewConfig['csvExport'] );
 
 		$parser = $this->getParser();

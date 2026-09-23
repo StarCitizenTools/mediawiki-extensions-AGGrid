@@ -100,18 +100,16 @@ function applyFormatters( colDefs ) {
 				}
 			}
 			delete colDef.format;
-			// Export the raw value: a CSV is for reuse, where "27 kg" or a locale's date
-			// wording is not data. See csvExport.js.
 			colDef.useValueFormatterForExport = false;
 		}
 	} );
 }
 
 /**
- * Apply the built-in theme, extension registry (column types + components) to
- * gridOptions, consume the extension's own quickSearch option, and drop the loading
- * skeleton/busy state from the container. Shared by the inline and backend mount
- * paths so both wire the built-ins identically.
+ * Apply the built-in theme, formatters, extension registry (column types + components)
+ * and CSV export defaults to gridOptions, consume the extension's own toolbar options,
+ * and drop the loading skeleton/busy state from the container. Shared by the inline and
+ * backend mount paths so both wire the built-ins identically.
  *
  * @param {HTMLElement} el The .ext-aggrid container.
  * @param {Object} gridOptions gridOptions to prepare in place.
@@ -132,11 +130,8 @@ function prepareGridOptions( el, gridOptions ) {
 	const registry = buildRegistry();
 	gridOptions.columnTypes = Object.assign( {}, gridOptions.columnTypes, registry.columnTypes );
 	gridOptions.components = Object.assign( {}, gridOptions.components, registry.components );
-	// Every grid's CSV export defaults, whether the button or a gadget starts the export;
-	// the author's own defaultCsvExportParams win.
-	gridOptions.defaultCsvExportParams = Object.assign(
-		csvExport.defaultParams( mw.config.get( 'wgTitle' ) ),
-		gridOptions.defaultCsvExportParams
+	gridOptions.defaultCsvExportParams = csvExport.defaultParams(
+		mw.config.get( 'wgTitle' ), gridOptions.defaultCsvExportParams
 	);
 	// Consume our own gridOptions before createGrid — like colDef.format above, they are
 	// extension config, and AG Grid warns about unknown gridOptions keys.
@@ -186,8 +181,7 @@ function buildChrome( el, api, chrome, makeOnQuickSearch ) {
 	if ( !bar ) {
 		return;
 	}
-	// Only the first trailing item is marked `end`: that pushes it, and everything after
-	// it, to the trailing edge.
+	// Only the first: `end` pushes an item and everything after it to the trailing edge.
 	const firstTrailing = wanted.find( ( item ) => item.trailing );
 	wanted.forEach( ( item ) => toolbar.addItem( bar, item.el, { end: item === firstTrailing } ) );
 }
@@ -370,9 +364,8 @@ function mountBackend( el, gridOptions ) {
 	// box to a server round-trip: typing updates state.q, resets to the first page,
 	// and purges the infinite cache so the new total and rows reload from offset 0.
 	const chrome = prepareGridOptions( el, gridOptions );
-	// No export button: the Infinite Row Model exports only the blocks it has loaded, so
-	// the file would be a partial one that looks complete. LuaLibrary already drops the
-	// option from source grids; this keeps it off whatever the placeholder carries.
+	// The Infinite Row Model exports only the blocks it has loaded: a partial file that
+	// looks complete.
 	chrome.csvExport = null;
 	// Built once the api exists (createAndAnnounce supplies it): on each apply, stash
 	// the term, jump to the first page, and purge the infinite cache so the new total

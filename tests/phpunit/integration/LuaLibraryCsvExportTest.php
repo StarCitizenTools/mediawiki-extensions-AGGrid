@@ -78,9 +78,7 @@ class LuaLibraryCsvExportTest extends MediaWikiIntegrationTestCase {
 	}
 
 	public function testDroppedFromSourceGrids(): void {
-		// A backend grid holds only the rows it has loaded, so an export button there
-		// would download a partial file that looks complete. A stub backend stands in
-		// for SMW/Bucket, so this runs without either extension installed.
+		// A stub backend, so this runs without SMW or Bucket installed.
 		$backend = $this->createMock( Backend::class );
 		$backend->method( 'getType' )->willReturn( 'stub' );
 		$backend->method( 'compileSource' )->willReturn( [ [ [ 'field' => 'n' ] ], [ 'q' => 'x' ] ] );
@@ -99,7 +97,6 @@ class LuaLibraryCsvExportTest extends MediaWikiIntegrationTestCase {
 		$viewConfig = $this->viewConfigFromPlaceholder( $parser, $result[0] );
 
 		$this->assertArrayNotHasKey( 'csvExport', $viewConfig );
-		// Only the export is dropped: the author's other options pass through.
 		$this->assertTrue( $viewConfig['expand'] );
 	}
 

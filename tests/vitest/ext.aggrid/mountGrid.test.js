@@ -428,6 +428,16 @@ describe( 'mountGrid', () => {
 		expect( typeof params.processCellCallback ).toBe( 'function' );
 	} );
 
+	it( 'keeps the formula guard whatever defaultCsvExportParams the author sets', () => {
+		const el = makeEl(
+			'{"columnDefs":[],"rowData":[],"defaultCsvExportParams":{"processCellCallback":false,"suppressQuotes":true}}'
+		);
+		mountGrid( el );
+		const params = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ].defaultCsvExportParams;
+		expect( typeof params.processCellCallback ).toBe( 'function' );
+		expect( 'suppressQuotes' in params ).toBe( false );
+	} );
+
 	it( 'puts the export button before expand, starting the trailing group', () => {
 		const restore = stubDialogSupport();
 		stubCreateGridWithRootWrapper();
@@ -438,8 +448,7 @@ describe( 'mountGrid', () => {
 		expect( items ).toHaveLength( 3 );
 		expect( items[ 1 ].querySelector( '.ag-icon-csv' ) ).not.toBeNull();
 		expect( items[ 2 ].querySelector( '.ag-icon-maximize' ) ).not.toBeNull();
-		// Only the first trailing item takes the auto margin: on both, the free space
-		// would split between them and float the export button mid-toolbar.
+		// On both, the auto margins would split the free space between them.
 		expect( items[ 1 ].classList.contains( 'ext-aggrid-toolbar__item--end' ) ).toBe( true );
 		expect( items[ 2 ].classList.contains( 'ext-aggrid-toolbar__item--end' ) ).toBe( false );
 		restore();
@@ -451,8 +460,6 @@ describe( 'mountGrid', () => {
 		mountGrid( el );
 		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
 		expect( 'csvExport' in opts ).toBe( false );
-		// The Infinite Row Model exports only the blocks it has loaded: a partial file
-		// that looks complete is worse than no button.
 		expect( el.querySelector( '.ag-icon-csv' ) ).toBeNull();
 	} );
 
@@ -869,7 +876,6 @@ describe( 'applyFormatters', () => {
 		const plain = { field: 'name' };
 		applyFormatters( [ formatted, plain ] );
 		expect( formatted.useValueFormatterForExport ).toBe( false );
-		// Rich column types rely on their valueFormatter for export text.
 		expect( 'useValueFormatterForExport' in plain ).toBe( false );
 	} );
 

@@ -87,6 +87,7 @@ csvExport = { label = 'Download data' },
   applications do not run it as a formula.
 - To change the file name, column separator, and similar settings, set AG Grid's
   [`defaultCsvExportParams`](https://www.ag-grid.com/javascript-data-grid/csv-export/) option.
+  Its `suppressQuotes`, `prependContent` and `appendContent` settings are ignored.
 
 CSV export is not available on [backend source grids](data-sources.md).
 

@@ -1,8 +1,6 @@
 const csvExport = require( '../../../modules/ext.aggrid/csvExport.js' );
 
-// The params AG Grid hands processCellCallback: the cell's raw value, plus a
-// formatValue() that runs the column's valueFormatter (or returns the value as-is
-// when the column has none).
+// formatValue() runs the column's valueFormatter, or returns the value as-is without one.
 function cellParams( value, colDef ) {
 	return {
 		value,
@@ -69,15 +67,23 @@ describe( 'defaultParams', () => {
 				.toBe( '\'=HYPERLINK("http://example.org")' );
 		} );
 
-		// AG Grid infers a data type for a plain column and gives it a formatter, so
-		// formatValue() hands back text even where the author set none: "-5" for a
-		// number, "a,b" for an array.
+		// The formatters AG Grid infers for a plain number or array column.
 		const inferredNumber = { valueFormatter: ( p ) => String( p.value ) };
 		const inferredObject = { valueFormatter: ( p ) => p.value.toString() };
 
 		it( 'exports a number as a number, so a negative one is not prefixed', () => {
 			expect( processCellCallback( cellParams( -5, inferredNumber ) ) ).toBe( -5 );
 			expect( processCellCallback( cellParams( 1234.5, inferredNumber ) ) ).toBe( 1234.5 );
+		} );
+
+		it( 'uses a column type\'s own formatter for a number', () => {
+			const rating = { valueFormatter: ( p ) => [ 'Bad', 'OK', 'Good' ][ p.value ] };
+			expect( processCellCallback( cellParams( 2, rating ) ) ).toBe( 'Good' );
+		} );
+
+		it( 'uses a column type\'s own formatter for an array', () => {
+			const tags = { valueFormatter: ( p ) => p.value.join( ' / ' ) };
+			expect( processCellCallback( cellParams( [ 'a', 'b' ], tags ) ) ).toBe( 'a / b' );
 		} );
 
 		it( 'joins a plain multi-value cell with ", ", like a list cell', () => {
@@ -108,7 +114,7 @@ describe( 'defaultParams', () => {
 		const { processGroupHeaderCallback } = csvExport.defaultParams( 'Dogs' );
 		const columnGroup = {};
 		const api = {
-			getDisplayNameForColumnGroup: ( group, location ) => ( group === columnGroup && location === 'csv' ? '@Group' : null )
+			getDisplayNameForColumnGroup: ( group, location ) => ( group === columnGroup && location === 'header' ? '@Group' : null )
 		};
 		expect( processGroupHeaderCallback( { columnGroup, api } ) ).toBe( '\'@Group' );
 	} );
@@ -117,10 +123,44 @@ describe( 'defaultParams', () => {
 		[ 'Dog breeds', 'Dog breeds.csv' ],
 		// AG Grid only appends the extension to a name with no dot in it.
 		[ 'St. Bernard', 'St. Bernard.csv' ],
-		// Characters a title may hold but a file name may not.
 		[ 'Ships/Fighters: A*B?"C"\\D', 'Ships_Fighters_ A_B__C__D.csv' ]
 	] )( 'names the file after the page title: %j', ( title, expected ) => {
 		expect( csvExport.defaultParams( title ).fileName ).toBe( expected );
+	} );
+
+	it( 'keeps the formula guard when the author sets the callbacks', () => {
+		const params = csvExport.defaultParams( 'Dogs', {
+			processCellCallback: false,
+			processHeaderCallback: 'x',
+			processGroupHeaderCallback: null
+		} );
+		const colDef = {};
+		expect( params.processCellCallback( cellParams( '=1+1', colDef ) ) ).toBe( '\'=1+1' );
+		expect( typeof params.processHeaderCallback ).toBe( 'function' );
+		expect( typeof params.processGroupHeaderCallback ).toBe( 'function' );
+	} );
+
+	it( 'ignores the author settings that would bypass the formula guard', () => {
+		const params = csvExport.defaultParams( 'Dogs', {
+			suppressQuotes: true,
+			prependContent: '=1+1',
+			appendContent: '=1+1'
+		} );
+		expect( 'suppressQuotes' in params ).toBe( false );
+		expect( 'prependContent' in params ).toBe( false );
+		expect( 'appendContent' in params ).toBe( false );
+	} );
+
+	it( 'lets the author set the file name and other settings', () => {
+		const params = csvExport.defaultParams( 'Dogs', { fileName: 'dogs.csv', columnSeparator: ';' } );
+		expect( params.fileName ).toBe( 'dogs.csv' );
+		expect( params.columnSeparator ).toBe( ';' );
+	} );
+
+	it( 'ignores author params that are not a table of settings', () => {
+		// An empty Lua table arrives as [].
+		expect( csvExport.defaultParams( 'Dogs', [] ).fileName ).toBe( 'Dogs.csv' );
+		expect( csvExport.defaultParams( 'Dogs', 'x' ).fileName ).toBe( 'Dogs.csv' );
 	} );
 
 	it( 'leaves the file name to AG Grid when there is no page title', () => {
