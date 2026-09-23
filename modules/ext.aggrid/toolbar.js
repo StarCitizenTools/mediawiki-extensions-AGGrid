@@ -1,5 +1,5 @@
 // The grid's toolbar, holding the controls the extension's own gridOptions add
-// (quickSearch, expand).
+// (quickSearch, csvExport, expand).
 //
 // It mirrors the DOM of AG Grid Enterprise's Quick Access Toolbar, whose components
 // the Community bundle registers by name only, to raise "module not loaded" errors.
@@ -49,6 +49,27 @@ function ensure( el ) {
 }
 
 /**
+ * Normalize a toolbar-button gridOption (csvExport, expand) into a config, or null when
+ * disabled.
+ *
+ * Accepted: true; { label? }; and [], an empty Lua table arriving as a JSON array.
+ * Anything else disables the button — LuaLibrary rejects bad shapes at parse time, but
+ * parser-cache entries can predate that validation, so this stays defensive.
+ *
+ * @param {*} raw The gridOption as parsed from the placeholder JSON.
+ * @return {Object|null} { label: string|null } or null.
+ */
+function normalizeButtonOption( raw ) {
+	if ( raw === true || ( Array.isArray( raw ) && raw.length === 0 ) ) {
+		return { label: null };
+	}
+	if ( !raw || typeof raw !== 'object' || Array.isArray( raw ) ) {
+		return null;
+	}
+	return { label: typeof raw.label === 'string' ? raw.label : null };
+}
+
+/**
  * Append an item to the toolbar.
  *
  * @param {HTMLElement} toolbar From ensure().
@@ -64,4 +85,4 @@ function addItem( toolbar, item, options ) {
 	toolbar.appendChild( item );
 }
 
-module.exports = { ensure, addItem, setClass };
+module.exports = { ensure, addItem, setClass, normalizeButtonOption };

@@ -60,6 +60,12 @@ end
 ---    because Bucket's query language has no LIKE operator.
 ---
 --- The extension also understands these non-AG-Grid gridOptions:
+---  * csvExport   boolean|table @opt-in button in the grid's toolbar that downloads
+---                 the rows as a CSV file named after the page. `true` enables it with
+---                 an i18n label; a table overrides: { label = 'Download data' }.
+---                 Columns with a `format` spec export their raw values. Set AG Grid's
+---                 own `defaultCsvExportParams` for the file name, separator, etc.
+---                 Works on inline grids; ignored on `source` grids.
 ---  * expand      boolean|table @opt-in button in the grid's toolbar that opens the
 ---                 grid in a full-window view, for wide grids in a narrow content
 ---                 column. `true` enables it with an i18n label; a table overrides:

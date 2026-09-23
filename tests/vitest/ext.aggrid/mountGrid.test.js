@@ -373,6 +373,96 @@ describe( 'mountGrid', () => {
 		restore();
 	} );
 
+	it( 'consumes csvExport and builds the export button before gridReady fires', () => {
+		stubCreateGridWithRootWrapper();
+		let buttonAtFire = null;
+		global.mw.hook = vi.fn( ( name ) => ( {
+			fire: vi.fn( ( api, gridEl ) => {
+				if ( name === 'ext.aggrid.gridReady' ) {
+					buttonAtFire = gridEl.querySelector( '.ag-icon-csv' );
+				}
+			} )
+		} ) );
+
+		const el = makeEl( '{"columnDefs":[],"rowData":[],"csvExport":true}' );
+		mountGrid( el );
+
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		// Consumed before createGrid — AG Grid warns about unknown gridOptions keys.
+		expect( 'csvExport' in opts ).toBe( false );
+		expect( buttonAtFire ).not.toBeNull();
+
+		delete global.mw.hook;
+	} );
+
+	it( 'gives every grid the CSV export defaults, named after the page', () => {
+		const get = global.mw.config.get;
+		global.mw.config.get = ( key ) => ( key === 'wgTitle' ? 'Dog breeds' : null );
+		// No csvExport: a gadget calling api.exportDataAsCsv() gets the defaults too.
+		const el = makeEl( '{"columnDefs":[],"rowData":[]}' );
+		mountGrid( el );
+		global.mw.config.get = get;
+
+		const params = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ].defaultCsvExportParams;
+		expect( params.fileName ).toBe( 'Dog breeds.csv' );
+		const colDef = {};
+		expect( params.processCellCallback( {
+			value: '=1+1',
+			column: { getColDef: () => colDef },
+			formatValue: ( v ) => v
+		} ) ).toBe( '\'=1+1' );
+	} );
+
+	it( 'lets the author\'s defaultCsvExportParams win over the built-in ones', () => {
+		const get = global.mw.config.get;
+		global.mw.config.get = ( key ) => ( key === 'wgTitle' ? 'Dog breeds' : null );
+		const el = makeEl(
+			'{"columnDefs":[],"rowData":[],"defaultCsvExportParams":{"fileName":"dogs.csv","columnSeparator":";"}}'
+		);
+		mountGrid( el );
+		global.mw.config.get = get;
+
+		const params = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ].defaultCsvExportParams;
+		expect( params.fileName ).toBe( 'dogs.csv' );
+		expect( params.columnSeparator ).toBe( ';' );
+		expect( typeof params.processCellCallback ).toBe( 'function' );
+	} );
+
+	it( 'keeps the formula guard whatever defaultCsvExportParams the author sets', () => {
+		const el = makeEl(
+			'{"columnDefs":[],"rowData":[],"defaultCsvExportParams":{"processCellCallback":false,"suppressQuotes":true}}'
+		);
+		mountGrid( el );
+		const params = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ].defaultCsvExportParams;
+		expect( typeof params.processCellCallback ).toBe( 'function' );
+		expect( 'suppressQuotes' in params ).toBe( false );
+	} );
+
+	it( 'puts the export button before expand, starting the trailing group', () => {
+		const restore = stubDialogSupport();
+		stubCreateGridWithRootWrapper();
+		const el = makeEl( '{"columnDefs":[],"rowData":[],"quickSearch":true,"csvExport":true,"expand":true}' );
+		mountGrid( el );
+
+		const items = Array.from( el.querySelector( '.ext-aggrid-toolbar' ).children );
+		expect( items ).toHaveLength( 3 );
+		expect( items[ 1 ].querySelector( '.ag-icon-csv' ) ).not.toBeNull();
+		expect( items[ 2 ].querySelector( '.ag-icon-maximize' ) ).not.toBeNull();
+		// On both, the auto margins would split the free space between them.
+		expect( items[ 1 ].classList.contains( 'ext-aggrid-toolbar__item--end' ) ).toBe( true );
+		expect( items[ 2 ].classList.contains( 'ext-aggrid-toolbar__item--end' ) ).toBe( false );
+		restore();
+	} );
+
+	it( 'builds no export button on the backend path', () => {
+		stubBackendCreateGrid();
+		const el = makeBackendEl( '{"columnDefs":[{"field":"n"}],"csvExport":true}' );
+		mountGrid( el );
+		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
+		expect( 'csvExport' in opts ).toBe( false );
+		expect( el.querySelector( '.ag-icon-csv' ) ).toBeNull();
+	} );
+
 	it( 'builds the expand button on the backend path', () => {
 		const restore = stubDialogSupport();
 		stubBackendCreateGrid();
@@ -434,13 +524,14 @@ describe( 'mountGrid', () => {
 		const restore = stubDialogSupport();
 		stubCreateGridWithRootWrapper();
 		// No rowData and no fetch handle → error mount.
-		const el = makeEl( '{"columnDefs":[{"field":"name"}],"quickSearch":true,"expand":true}' );
+		const el = makeEl( '{"columnDefs":[{"field":"name"}],"quickSearch":true,"expand":true,"csvExport":true}' );
 		mountGrid( el );
 
 		const opts = global.agGrid.createGrid.mock.calls[ 0 ][ 1 ];
 		expect( 'quickSearch' in opts ).toBe( false );
 		// A button that expands a grid which could not load its rows is a dead control.
 		expect( 'expand' in opts ).toBe( false );
+		expect( 'csvExport' in opts ).toBe( false );
 		expect( el.querySelector( '.ext-aggrid-toolbar' ) ).toBeNull();
 		restore();
 	} );
@@ -778,6 +869,14 @@ describe( 'applyFormatters', () => {
 		applyFormatters( [ colDef ] );
 		expect( colDef.valueFormatter ).toBe( vf );
 		expect( 'format' in colDef ).toBe( false );
+	} );
+
+	it( 'exports a formatted column\'s raw value, not its formatted text', () => {
+		const formatted = { field: 'kg', format: { style: 'number', suffix: ' kg' } };
+		const plain = { field: 'name' };
+		applyFormatters( [ formatted, plain ] );
+		expect( formatted.useValueFormatterForExport ).toBe( false );
+		expect( 'useValueFormatterForExport' in plain ).toBe( false );
 	} );
 
 	it( 'recurses into column-group children', () => {

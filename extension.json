@@ -115,6 +115,7 @@
 				"ext.aggrid/setFilter.js",
 				"ext.aggrid/quickSearch.js",
 				"ext.aggrid/toolbar.js",
+				"ext.aggrid/csvExport.js",
 				"ext.aggrid/expand.js",
 				{
 					"name": "ext.aggrid/bundle.json",
@@ -136,6 +137,7 @@
 				"aggrid-setfilter-values-error",
 				"aggrid-quicksearch-placeholder",
 				"aggrid-quicksearch-label",
+				"aggrid-csvexport-label",
 				"aggrid-expand-label",
 				"aggrid-expand-collapse-label",
 				"aggrid-expand-dialog-label"

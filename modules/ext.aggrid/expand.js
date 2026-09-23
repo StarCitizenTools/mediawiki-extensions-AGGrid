@@ -9,7 +9,7 @@
 // The grid's CHILDREN move into the dialog, not the .ext-aggrid placeholder, which stays
 // in flow carrying whatever height the wiki gave it.
 
-const { setClass } = require( './toolbar.js' );
+const { setClass, normalizeButtonOption } = require( './toolbar.js' );
 
 const DIALOG_CLASS = 'ext-aggrid-expand';
 const ROOT_CLASS = 'ext-aggrid-expand-root';
@@ -67,26 +67,6 @@ function flatten( el ) {
 const openStates = new Set();
 
 let overlayRoot = null;
-
-/**
- * Normalize the author's expand gridOption into a config, or null when disabled.
- *
- * Accepted: true; { label? }; and [], an empty Lua table arriving as a JSON array.
- * Anything else disables the button — LuaLibrary rejects bad shapes at parse time, but
- * parser-cache entries can predate that validation, so this stays defensive.
- *
- * @param {*} raw gridOptions.expand as parsed from the placeholder JSON.
- * @return {Object|null} { label: string|null } or null.
- */
-function normalize( raw ) {
-	if ( raw === true || ( Array.isArray( raw ) && raw.length === 0 ) ) {
-		return { label: null };
-	}
-	if ( !raw || typeof raw !== 'object' || Array.isArray( raw ) ) {
-		return null;
-	}
-	return { label: typeof raw.label === 'string' ? raw.label : null };
-}
 
 /**
  * Whether this browser can show a modal dialog. Where it cannot, no button is built —
@@ -522,7 +502,7 @@ function closeAll( root ) {
  *
  * @param {HTMLElement} el The .ext-aggrid container (post-createGrid).
  * @param {Object} api The AG Grid GridApi.
- * @param {Object} config Normalized config from normalize().
+ * @param {Object} config Normalized config from normalizeButtonOption().
  * @return {HTMLElement|null} The toolbar item.
  */
 function buildItem( el, api, config ) {
@@ -563,4 +543,4 @@ function buildItem( el, api, config ) {
 	return item;
 }
 
-module.exports = { normalize, isSupported, buildItem, closeAll };
+module.exports = { normalize: normalizeButtonOption, isSupported, buildItem, closeAll };

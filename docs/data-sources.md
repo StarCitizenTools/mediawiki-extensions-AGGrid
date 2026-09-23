@@ -173,6 +173,7 @@ filters (set filters and number filters) still work.
 | `filterProp` facet | ✅ | — |
 | Paging with whole-result-set totals | ✅ | ✅ |
 | [`format`](formatting.md) specs | ✅ | ✅ |
+| [CSV export](authoring-grids.md#downloading-as-csv) | ❌ | ❌ |
 
 On saved pages the rows are served from a cacheable REST endpoint, so a source grid adds no
 weight to the page HTML itself.
