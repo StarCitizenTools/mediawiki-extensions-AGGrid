@@ -314,6 +314,107 @@ class SmwDataSourceTest extends MediaWikiIntegrationTestCase {
 		);
 	}
 
+	// -------------------------------------------------------------------------
+	// getPage: default sort (spec orderBy)
+	// -------------------------------------------------------------------------
+
+	public function testGetPageAppliesDefaultSortWhenNoUserSort(): void {
+		$spec = [
+			'query' => '[[Category:City]]',
+			'printouts' => [ self::POP, self::CAPITAL ],
+			'mainlabel' => null,
+			'orderBy' => [ 'field' => self::POP, 'direction' => 'DESC' ],
+		];
+		$captured = null;
+		$source = $this->newDataSource( $this->queryResult( [] ), $spec, $captured );
+
+		$source->getPage( self::PAGE_ID, 0, 0, [], [], 25 );
+
+		$this->assertSame(
+			[ self::POP => 'DESC', '' => 'ASC' ],
+			$captured->getSortKeys(),
+			'the spec orderBy applies while the client sends no sortModel'
+		);
+	}
+
+	public function testGetPageUserSortOverridesDefaultSort(): void {
+		$spec = [
+			'query' => '[[Category:City]]',
+			'printouts' => [ self::POP, self::CAPITAL ],
+			'mainlabel' => null,
+			'orderBy' => [ 'field' => self::POP, 'direction' => 'DESC' ],
+		];
+		$captured = null;
+		$source = $this->newDataSource( $this->queryResult( [] ), $spec, $captured );
+
+		$source->getPage(
+			self::PAGE_ID,
+			0,
+			0,
+			[ [ 'colId' => self::CAPITAL, 'sort' => 'asc' ] ],
+			[],
+			25
+		);
+
+		$this->assertSame(
+			[ self::CAPITAL => 'ASC', '' => 'ASC' ],
+			$captured->getSortKeys(),
+			'a user sort replaces the spec default entirely'
+		);
+	}
+
+	public function testGetPageDefaultSortResolvesAliasToRealProperty(): void {
+		$spec = [
+			'query' => '[[Category:City]]',
+			'printouts' => [ 'Has population=Pop' ],
+			'mainlabel' => null,
+			'fields' => [ 'Pop' => 'Has population' ],
+			'orderBy' => [ 'field' => 'Pop', 'direction' => 'DESC' ],
+		];
+		$captured = null;
+		$source = $this->newDataSource( $this->queryResult( [] ), $spec, $captured );
+
+		$source->getPage( self::PAGE_ID, 0, 0, [], [], 25 );
+
+		$this->assertSame(
+			[ 'Has_population' => 'DESC', '' => 'ASC' ],
+			$captured->getSortKeys(),
+			'the default sort resolves the alias to the property DBkey, like a user sort'
+		);
+	}
+
+	public function testGetPageDefaultSortSubjectColumn(): void {
+		$spec = [
+			'query' => '[[Category:City]]',
+			'printouts' => [ self::POP ],
+			'mainlabel' => null,
+			'orderBy' => [ 'field' => '_subject', 'direction' => 'DESC' ],
+		];
+		$captured = null;
+		$source = $this->newDataSource( $this->queryResult( [] ), $spec, $captured );
+
+		$source->getPage( self::PAGE_ID, 0, 0, [], [], 25 );
+
+		$this->assertSame(
+			[ '' => 'DESC' ],
+			$captured->getSortKeys(),
+			'default-sorting the subject maps to the empty sort key with no extra tiebreaker'
+		);
+	}
+
+	public function testGetPageNoDefaultSortKeepsSubjectOrder(): void {
+		$captured = null;
+		$source = $this->newDataSource( $this->queryResult( [] ), null, $captured );
+
+		$source->getPage( self::PAGE_ID, 0, 0, [], [], 25 );
+
+		$this->assertSame(
+			[ '' => 'ASC' ],
+			$captured->getSortKeys(),
+			'without an orderBy the subject order stays the default (legacy behavior)'
+		);
+	}
+
 	public function testGetPageResolvesAliasedColumnFilterToRealProperty(): void {
 		$spec = [
 			'query' => '[[Category:City]]',

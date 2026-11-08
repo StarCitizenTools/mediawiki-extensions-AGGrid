@@ -139,4 +139,106 @@ class SmwSourceCompilerTest extends MediaWikiIntegrationTestCase {
 		$this->expectExceptionMessage( 'mw.ext.aggrid.render: invalid property "_"' );
 		$this->compiler->compile( [ 'query' => '[[Category:City]]', 'printouts' => [ '_' ] ] );
 	}
+
+	// -------------------------------------------------------------------------
+	// orderBy (default sort)
+	// -------------------------------------------------------------------------
+
+	public function testOrderByStoredInSpec(): void {
+		[ $columnDefs, $spec ] = $this->compiler->compile( [
+			'query' => '[[Category:City]]',
+			'printouts' => [ 'Has population', 'Has mayor' ],
+			'orderBy' => [ 'field' => 'Has population', 'direction' => 'DESC' ],
+		] );
+		$this->assertSame(
+			[ 'field' => 'Has population', 'direction' => 'DESC' ],
+			$spec['orderBy']
+		);
+		// orderBy is query semantics, not a colDef key: nothing leaks into columns.
+		foreach ( $columnDefs as $col ) {
+			$this->assertArrayNotHasKey( 'sort', $col );
+		}
+	}
+
+	public function testOrderByOmittedKeepsSpecWithoutIt(): void {
+		[ , $spec ] = $this->compiler->compile( [
+			'query' => '[[Category:City]]',
+			'printouts' => [ 'Has population' ],
+		] );
+		$this->assertArrayNotHasKey( 'orderBy', $spec );
+	}
+
+	public function testOrderByDefaultsToAscAndNormalizes(): void {
+		[ , $spec ] = $this->compiler->compile( [
+			'query' => '[[Category:City]]',
+			'printouts' => [ 'Has population' ],
+			'orderBy' => [ 'field' => ' Has population ', 'direction' => ' desc ' ],
+		] );
+		$this->assertSame( [ 'field' => 'Has population', 'direction' => 'DESC' ], $spec['orderBy'] );
+	}
+
+	public function testOrderByAcceptsAliasAndSubjectFields(): void {
+		[ , $spec ] = $this->compiler->compile( [
+			'query' => '[[Category:City]]',
+			'printouts' => [ 'Has population=Pop' ],
+			'orderBy' => [ 'field' => 'Pop' ],
+		] );
+		$this->assertSame( [ 'field' => 'Pop', 'direction' => 'ASC' ], $spec['orderBy'] );
+
+		[ , $spec ] = $this->compiler->compile( [
+			'query' => '[[Category:City]]',
+			'printouts' => [ 'Has population' ],
+			'orderBy' => [ 'field' => '_subject', 'direction' => 'DESC' ],
+		] );
+		$this->assertSame( [ 'field' => '_subject', 'direction' => 'DESC' ], $spec['orderBy'] );
+	}
+
+	public function testOrderByUnknownFieldThrows(): void {
+		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage(
+			'mw.ext.aggrid.render: orderBy field "Nope" must be one of the declared fields'
+		);
+		$this->compiler->compile( [
+			'query' => '[[Category:City]]',
+			'printouts' => [ 'Has population' ],
+			'orderBy' => [ 'field' => 'Nope' ],
+		] );
+	}
+
+	public function testOrderBySubjectRejectedWhenColumnSuppressed(): void {
+		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage(
+			'mw.ext.aggrid.render: orderBy field "_subject" must be one of the declared fields'
+		);
+		$this->compiler->compile( [
+			'query' => '[[Category:City]]',
+			'printouts' => [ 'Has population' ],
+			'mainlabel' => '-',
+			'orderBy' => [ 'field' => '_subject' ],
+		] );
+	}
+
+	public function testOrderByBadDirectionThrows(): void {
+		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage(
+			'mw.ext.aggrid.render: orderBy direction must be ASC or DESC'
+		);
+		$this->compiler->compile( [
+			'query' => '[[Category:City]]',
+			'printouts' => [ 'Has population' ],
+			'orderBy' => [ 'field' => 'Has population', 'direction' => 'sideways' ],
+		] );
+	}
+
+	public function testOrderByNotATableThrows(): void {
+		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage(
+			'mw.ext.aggrid.render: source.orderBy must be { field, direction }'
+		);
+		$this->compiler->compile( [
+			'query' => '[[Category:City]]',
+			'printouts' => [ 'Has population' ],
+			'orderBy' => 'Has population',
+		] );
+	}
 }

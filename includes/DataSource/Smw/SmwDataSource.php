@@ -102,7 +102,12 @@ class SmwDataSource extends AbstractBackendDataSource {
 			$query = $this->buildQuery( $spec, $spec['printouts'] ?? [] );
 			$query->setOffset( $offset );
 			$query->setLimit( $size );
-			$query->setSortKeys( $this->filterTranslator->toSortKeys( $sortModel, $displayOf ) );
+			// The author's orderBy is the default while the client sends no sortModel;
+			// toSortKeys lends it the alias resolution and tiebreaker handling.
+			$query->setSortKeys( $this->filterTranslator->toSortKeys(
+				$sortModel !== [] ? $sortModel : $this->defaultSortModel( $spec ),
+				$displayOf
+			) );
 
 			// Column filters and the free-text quick search are independent conditions
 			// ANDed onto the base query (and onto the count query, identically).
@@ -209,6 +214,23 @@ class SmwDataSource extends AbstractBackendDataSource {
 	// -------------------------------------------------------------------------
 	// Internals
 	// -------------------------------------------------------------------------
+
+	/**
+	 * The spec's default sort as a sortModel, or [] when none is declared. Mirrors
+	 * Bucket's defaultOrderBy: a user sort replaces it; clearing the sort falls back.
+	 *
+	 * @param array{orderBy?: array{field: string, direction: string}} $spec
+	 * @return array<int, array{colId: string, sort: string}>
+	 */
+	private function defaultSortModel( array $spec ): array {
+		if ( !isset( $spec['orderBy'] ) ) {
+			return [];
+		}
+		return [ [
+			'colId' => $spec['orderBy']['field'],
+			'sort' => strtolower( $spec['orderBy']['direction'] ),
+		] ];
+	}
 
 	/**
 	 * Build the filter Description for a filterModel, resolving each field's family
