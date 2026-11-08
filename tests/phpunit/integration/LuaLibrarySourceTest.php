@@ -208,6 +208,41 @@ class LuaLibrarySourceTest extends MediaWikiIntegrationTestCase {
 		);
 	}
 
+	public function testOrderByQueuedInSpec(): void {
+		$parser = $this->newStartedParser();
+		$result = $this->newLibrary( $parser )->render( [
+			'source' => [
+				'type' => 'smw',
+				'query' => '[[Category:City]]',
+				'printouts' => [ 'Has population=Pop' ],
+				'orderBy' => [ 'field' => 'Pop', 'direction' => 'DESC' ],
+			],
+		] );
+
+		$spec = $parser->getOutput()->getExtensionData( GridRenderer::SOURCE_EXT_DATA_KEY . '0' )['spec'];
+		$this->assertSame(
+			[ 'field' => 'Pop', 'direction' => 'DESC' ],
+			$spec['orderBy'],
+			'the default sort rides in the stored query spec, alias field included'
+		);
+		$this->assertSame( [ 'Pop' => 'Has population' ], $spec['fields'] );
+	}
+
+	public function testOrderByInvalidFieldThrows(): void {
+		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage(
+			'mw.ext.aggrid.render: orderBy field "Nope" must be one of the declared fields'
+		);
+		$this->newLibrary( $this->newStartedParser() )->render( [
+			'source' => [
+				'type' => 'smw',
+				'query' => '[[Category:City]]',
+				'printouts' => [ 'Has population' ],
+				'orderBy' => [ 'field' => 'Nope' ],
+			],
+		] );
+	}
+
 	public function testMissingSourceTypeThrows(): void {
 		$this->expectException( LuaError::class );
 		$this->newLibrary( $this->newStartedParser() )->render( [
