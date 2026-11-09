@@ -2,10 +2,10 @@ ag-grid-community:
   license: MIT
   homepage: https://www.ag-grid.com
   authors: AG Grid Ltd.
-  version: 36.2.0
+  version: 36.3.0
   type: tar
-  src: https://registry.npmjs.org/ag-grid-community/-/ag-grid-community-36.2.0.tgz
-  integrity: sha512-tK0Toj7t0fV/OMLPnDc0xlYKAqDbnCT3iJodYSn2TJ541caU8jPdYwWhMdW+AP2+pUNwFiJVgc04eJNfvBPsWw==
+  src: https://registry.npmjs.org/ag-grid-community/-/ag-grid-community-36.3.0.tgz
+  integrity: sha512-0JRaIwE82TuOcx+upA3OnTyhDAIUDqrMxLoBib6yVON0SyfICdpOnwD4QdiT0A1lgrC8SkzLBFRst73bTREF6Q==
 
   dest:
     # The minified UMD build (global `agGrid`). It is loaded from its static
