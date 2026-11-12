@@ -38,6 +38,9 @@ end
 ---                          displays and sorts on `prop`.
 ---      * mainlabel string|nil  @subject column header; '-' suppresses the subject
 ---                              column. Defaults to a 'Page' column.
+---      * orderBy   table|nil  @default sort { field = 'Pop', direction = 'DESC' };
+---                          the field must be a printout label (alias included),
+---                          or '_subject' for the subject column.
 ---
 --- Bucket source (`type = 'bucket'`) fields:
 ---      * bucket    string  @primary bucket name. Required.

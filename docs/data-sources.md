@@ -79,20 +79,20 @@ end
 return p
 ```
 
-### `filterProp` - filter on a different property than the column shows
+### `filterProp` — filter on a different property than the column shows
 
 By default a column's [set filter](filters.md#set-filter) lists and matches the same property
 the column displays and sorts on. Set `filterProp` to filter on a *different* property: the
 column still shows and sorts on `prop`, but its filter lists and matches `filterProp`'s values. In the example above, the **Model** column displays each ship's model but
 filters by manufacturer.
 
-### `orderBy` - the default sort
+### `orderBy` — the default sort
 
 `orderBy = { field = 'Pop', direction = 'DESC' }` sets the sort the grid loads with. The
-field must be one of `printouts` (by label - an alias like `'Pop'` works), or `'_subject'` to
+field must be one of `printouts` (by label — an alias like `'Pop'` works), or `'_subject'` to
 sort by page name. `direction` is `'ASC'` (default) or `'DESC'`.
 
-The sort runs on the **server**, on the very first page fetch - unlike a client-side
+The sort runs on the **server**, on the very first page fetch — unlike a client-side
 `initialState.sortModel`, it cannot race the grid's initial load. A user sort replaces it
 for as long as it is active; clearing the sort falls back to it.
 
