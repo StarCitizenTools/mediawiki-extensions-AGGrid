@@ -69,7 +69,8 @@ trait SourceCompilerSupport {
 	/**
 	 * Validate an `orderBy` descriptor into a stored spec entry, or null when absent.
 	 * The field must be one of $allowed; the direction is 'ASC' (default) or 'DESC'.
-	 * It feeds the stored query spec, so parse time is the only author-feedback point.
+	 * It feeds the stored query spec, so anything malformed (an unknown key, a
+	 * non-string direction) fails here instead of silently sorting ascending.
 	 *
 	 * @param mixed $orderBy The `source.orderBy` value; null when absent.
 	 * @param string[] $allowed Field names the sort may name.
@@ -84,13 +85,20 @@ trait SourceCompilerSupport {
 		if ( !is_array( $orderBy ) || !isset( $orderBy['field'] ) || !is_string( $orderBy['field'] ) ) {
 			$this->fail( 'source.orderBy must be { field, direction }' );
 		}
+		foreach ( array_keys( $orderBy ) as $key ) {
+			if ( $key !== 'field' && $key !== 'direction' ) {
+				$this->fail( 'unknown orderBy key "' . $key . '"' );
+			}
+		}
 		$field = trim( $orderBy['field'] );
 		if ( !in_array( $field, $allowed, true ) ) {
 			$this->fail( 'orderBy field "' . $field . '" must be one of the ' . $noun . ' fields' );
 		}
-		$direction = isset( $orderBy['direction'] ) && is_string( $orderBy['direction'] )
-			? strtoupper( trim( $orderBy['direction'] ) )
-			: 'ASC';
+		$direction = $orderBy['direction'] ?? 'ASC';
+		if ( !is_string( $direction ) ) {
+			$this->fail( 'orderBy direction must be ASC or DESC' );
+		}
+		$direction = strtoupper( trim( $direction ) );
 		if ( $direction !== 'ASC' && $direction !== 'DESC' ) {
 			$this->fail( 'orderBy direction must be ASC or DESC' );
 		}
