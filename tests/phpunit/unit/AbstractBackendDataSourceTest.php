@@ -131,6 +131,55 @@ class AbstractBackendDataSourceTest extends MediaWikiUnitTestCase {
 		$this->assertSame( 'dragon', $seenCount['quickSearch'] );
 	}
 
+	public function testGetPageAppliesSpecOrderByWhenRequestHasNoSort(): void {
+		$src = $this->newSource( [ 'spec' => [
+			'query' => 'X',
+			'orderBy' => [ 'field' => 'pop', 'direction' => 'DESC' ],
+		] ] );
+		$seenExec = null;
+		$src->executeQueryFn = static function ( $spec, $offset, $size, $sortModel ) use ( &$seenExec ): array {
+			$seenExec = $sortModel;
+			return [];
+		};
+
+		$src->getPage( 1, 0, 0, [], [], 25 );
+
+		$this->assertSame(
+			[ [ 'colId' => 'pop', 'sort' => 'desc' ] ],
+			$seenExec,
+			'the spec orderBy stands in for a missing sort'
+		);
+	}
+
+	public function testGetPageRequestSortReplacesSpecOrderBy(): void {
+		$src = $this->newSource( [ 'spec' => [
+			'query' => 'X',
+			'orderBy' => [ 'field' => 'pop', 'direction' => 'DESC' ],
+		] ] );
+		$seenExec = null;
+		$src->executeQueryFn = static function ( $spec, $offset, $size, $sortModel ) use ( &$seenExec ): array {
+			$seenExec = $sortModel;
+			return [];
+		};
+
+		$src->getPage( 1, 0, 0, [ [ 'colId' => 'name', 'sort' => 'asc' ] ], [], 25 );
+
+		$this->assertSame( [ [ 'colId' => 'name', 'sort' => 'asc' ] ], $seenExec );
+	}
+
+	public function testGetPageWithoutOrderByPassesEmptySort(): void {
+		$src = $this->newSource( [ 'spec' => [ 'query' => 'X' ] ] );
+		$seenExec = null;
+		$src->executeQueryFn = static function ( $spec, $offset, $size, $sortModel ) use ( &$seenExec ): array {
+			$seenExec = $sortModel;
+			return [];
+		};
+
+		$src->getPage( 1, 0, 0, [], [], 25 );
+
+		$this->assertSame( [], $seenExec );
+	}
+
 	public function testGetColumnValuesDedupesByKeyPreservingFirstOrder(): void {
 		$src = $this->newSource( [ 'spec' => [ 'query' => 'X' ] ] );
 		$src->fetchFn = static fn (): array => [

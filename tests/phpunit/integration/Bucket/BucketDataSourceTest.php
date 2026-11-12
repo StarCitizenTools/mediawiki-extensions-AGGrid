@@ -172,6 +172,19 @@ class BucketDataSourceTest extends MediaWikiIntegrationTestCase {
 		$this->assertSame( [ 'fieldName' => 'value', 'direction' => 'DESC' ], $captured['orderBy'] );
 	}
 
+	public function testGetPageDefaultOrderByOnJoinedField(): void {
+		$spec = $this->spec();
+		$spec['orderBy'] = [ 'field' => 'skill.category', 'direction' => 'ASC' ];
+		$captured = null;
+		$source = $this->newDataSource( [], 0, $spec, $captured );
+		$source->getPage( self::PAGE_ID, 0, 0, [], [], 10 );
+		$this->assertSame(
+			[ 'fieldName' => 'skill.category', 'direction' => 'ASC' ],
+			$captured['orderBy'],
+			'the default resolves through the skill__category colId back to its select'
+		);
+	}
+
 	public function testGetPageSortOverridesDefault(): void {
 		$captured = null;
 		$source = $this->newDataSource( [], 0, null, $captured );
