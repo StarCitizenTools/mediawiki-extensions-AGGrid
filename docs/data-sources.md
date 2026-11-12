@@ -92,9 +92,9 @@ filters by manufacturer.
 field must be one of `printouts` (by label — an alias like `'Pop'` works), or `'_subject'` to
 sort by page name. `direction` is `'ASC'` (default) or `'DESC'`.
 
-The sort runs on the **server**, on the very first page fetch — unlike a client-side
-`initialState.sortModel`, it cannot race the grid's initial load. A user sort replaces it
-for as long as it is active; clearing the sort falls back to it.
+The column shows the sort arrow from the first load, and the sort runs on the server. A user
+sort replaces it for as long as it is active; clearing the sort returns the rows to the
+default order, without the arrow.
 
 > Like any sort on an SMW grid, sorting on a property lists only the pages that have a value
 > for it — SMW sorts that way unless the wiki adds `SMW_QSORT_UNCONDITIONAL` to

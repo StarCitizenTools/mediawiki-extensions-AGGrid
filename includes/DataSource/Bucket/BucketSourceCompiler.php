@@ -54,6 +54,13 @@ class BucketSourceCompiler {
 		[ $columnDefs, $selects, $fields ] = $this->parseFields( $source['fields'] ?? null, $bucket, $schemas );
 		$where = $this->parseWhere( $source['where'] ?? null, $bucket, $schemas );
 		$orderBy = $this->parseOrderBy( $source['orderBy'] ?? null, $selects, 'selected' );
+		if ( $orderBy !== null ) {
+			$columnDefs = $this->markDefaultSort(
+				$columnDefs,
+				$this->colId( $orderBy['field'] ),
+				$orderBy['direction']
+			);
+		}
 
 		$spec = [
 			'bucket' => $bucket,

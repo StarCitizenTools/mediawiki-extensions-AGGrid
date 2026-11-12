@@ -12,10 +12,10 @@ use MediaWiki\Extension\Scribunto\Engines\LuaCommon\LuaError;
  *
  * Covers the idioms both compilers duplicate verbatim: harvesting the display-only
  * presentation keys an author may set on a column, merging them over a derived
- * columnDef, parsing the default sort (`orderBy`), and raising a parse-time author
- * error with the shared message prefix. Backend-specific concerns (SMW's filterProp
- * facet and _subject column, Bucket's filter override and join/where parsing) stay in
- * the compilers.
+ * columnDef, parsing the default sort (`orderBy`) and marking it on its column, and
+ * raising a parse-time author error with the shared message prefix. Backend-specific
+ * concerns (SMW's filterProp facet and _subject column, Bucket's filter override and
+ * join/where parsing) stay in the compilers.
  */
 trait SourceCompilerSupport {
 
@@ -103,6 +103,25 @@ trait SourceCompilerSupport {
 			$this->fail( 'orderBy direction must be ASC or DESC' );
 		}
 		return [ 'field' => $field, 'direction' => $direction ];
+	}
+
+	/**
+	 * Mark the default sort on its column, so AG Grid shows the sort indicator, starts
+	 * its header-click cycle from the real order, and sends the sort with its first
+	 * fetch. The stored spec still carries the default for requests without a sort.
+	 *
+	 * @param array[] $columnDefs
+	 * @param string $colId The sorted column's `field`.
+	 * @param string $direction 'ASC' or 'DESC'.
+	 * @return array[]
+	 */
+	protected function markDefaultSort( array $columnDefs, string $colId, string $direction ): array {
+		foreach ( $columnDefs as $i => $colDef ) {
+			if ( ( $colDef['field'] ?? null ) === $colId ) {
+				$columnDefs[$i]['sort'] = strtolower( $direction );
+			}
+		}
+		return $columnDefs;
 	}
 
 	/**

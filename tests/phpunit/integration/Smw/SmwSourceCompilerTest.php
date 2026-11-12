@@ -154,21 +154,33 @@ class SmwSourceCompilerTest extends MediaWikiIntegrationTestCase {
 			[ 'field' => 'Has population', 'direction' => 'DESC' ],
 			$spec['orderBy']
 		);
-		// orderBy is query semantics, not a colDef key: nothing leaks into columns.
-		foreach ( $columnDefs as $col ) {
-			$this->assertArrayNotHasKey( 'sort', $col );
-		}
+		// The sorted column carries the default so AG Grid shows the indicator and
+		// sends the sort with its first fetch; no other column does.
+		$sorts = array_column( $columnDefs, 'sort', 'field' );
+		$this->assertSame( [ 'Has population' => 'desc' ], $sorts );
+	}
+
+	public function testOrderByMarksSubjectColumnSorted(): void {
+		[ $columnDefs ] = $this->compiler->compile( [
+			'query' => '[[Category:City]]',
+			'printouts' => [ 'Has population' ],
+			'orderBy' => [ 'field' => '_subject' ],
+		] );
+		$this->assertSame( '_subject', $columnDefs[0]['field'] );
+		$this->assertSame( 'asc', $columnDefs[0]['sort'] );
+		$this->assertArrayNotHasKey( 'sort', $columnDefs[1] );
 	}
 
 	public function testOrderByAcceptsNumericLabel(): void {
 		// PHP stores the '2020' label as an int array key; the field match must not
 		// reject it on type.
-		[ , $spec ] = $this->compiler->compile( [
+		[ $columnDefs, $spec ] = $this->compiler->compile( [
 			'query' => '[[Category:City]]',
 			'printouts' => [ 'Has population=2020' ],
 			'orderBy' => [ 'field' => '2020', 'direction' => 'DESC' ],
 		] );
 		$this->assertSame( [ 'field' => '2020', 'direction' => 'DESC' ], $spec['orderBy'] );
+		$this->assertSame( 'desc', $columnDefs[1]['sort'] );
 	}
 
 	public function testOrderByNonStringDirectionThrows(): void {
