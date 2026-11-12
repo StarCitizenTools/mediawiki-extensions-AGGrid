@@ -50,6 +50,12 @@ abstract class AbstractBackendDataSource implements BackendDataSource {
 	): GridPage {
 		$spec = $this->resolveSpec( $pageId, $gridIndex, $spec );
 
+		// A request without a sort runs the author's default (source.orderBy), so
+		// clearing a user sort falls back to it.
+		if ( $sortModel === [] ) {
+			$sortModel = $this->defaultSortModel( $spec );
+		}
+
 		$rows = [];
 		foreach ( $this->executeQuery( $spec, $offset, $size, $sortModel, $filterModel, $quickSearch ) as $rawRow ) {
 			$rows[] = $this->mapRow( $rawRow, $spec );
@@ -109,6 +115,31 @@ abstract class AbstractBackendDataSource implements BackendDataSource {
 			) );
 		}
 		return $spec;
+	}
+
+	/**
+	 * The spec's default sort (source.orderBy) as a sortModel, or [] when none is
+	 * declared.
+	 *
+	 * @param array{orderBy?: array{field: string, direction: string}} $spec
+	 * @return array<int, array{colId: string, sort: string}>
+	 */
+	private function defaultSortModel( array $spec ): array {
+		if ( !isset( $spec['orderBy'] ) ) {
+			return [];
+		}
+		return [ [
+			'colId' => $this->orderByColId( $spec['orderBy']['field'] ),
+			'sort' => strtolower( $spec['orderBy']['direction'] ),
+		] ];
+	}
+
+	/**
+	 * The colId of the column a stored orderBy field names. The identity by default;
+	 * a backend whose orderBy names something other than the colId overrides it.
+	 */
+	protected function orderByColId( string $field ): string {
+		return $field;
 	}
 
 	/**

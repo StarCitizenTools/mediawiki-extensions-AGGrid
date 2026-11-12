@@ -78,8 +78,7 @@ class BucketDataSource extends AbstractBackendDataSource {
 		$familyOf = $this->familyResolver( $spec );
 
 		$filterOperands = $this->filterTranslator->toOperands( $filterModel, $selectOf, $familyOf );
-		$orderBy = $this->filterTranslator->toOrderBy( $sortModel, $selectOf )
-			?? $this->defaultOrderBy( $spec );
+		$orderBy = $this->filterTranslator->toOrderBy( $sortModel, $selectOf );
 
 		$data = $this->baseData( $spec, $filterOperands );
 		$data['limit_arg'] = $size;
@@ -161,19 +160,13 @@ class BucketDataSource extends AbstractBackendDataSource {
 	}
 
 	/**
-	 * The spec's default orderBy as a Bucket orderBy, or null when none is declared.
+	 * @inheritDoc
 	 *
-	 * @param array $spec
-	 * @return array{fieldName: string, direction: string}|null
+	 * A Bucket orderBy names a select string ('skill.category'); its column's colId
+	 * swaps the dots for `__` (see {@see BucketSourceCompiler}).
 	 */
-	private function defaultOrderBy( array $spec ): ?array {
-		if ( !isset( $spec['orderBy'] ) ) {
-			return null;
-		}
-		return [
-			'fieldName' => $spec['orderBy']['field'],
-			'direction' => $spec['orderBy']['direction'],
-		];
+	protected function orderByColId( string $field ): string {
+		return str_replace( '.', '__', $field );
 	}
 
 	/**
