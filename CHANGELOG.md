@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.8.0](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/compare/v0.7.0...v0.8.0) (2026-11-12)
+
+
+### Features
+
+* show the default sort on its column ([3bdfdd4](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/3bdfdd4b1b3c5ae55d7e77f058d0a501675b1dd3))
+* **smw:** server-side default sort (source.orderBy) ([3a8e2e1](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/3a8e2e16bbde55cac864dd0d3db53968b7177559))
+
+
+### Bug Fixes
+
+* **deps:** bump ag-grid-community from 36.2.0 to 36.3.0 ([947c916](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/947c916b08f0d9db4260748ef5447c462e7189a6))
+* reject malformed orderBy descriptors ([2a0a2f9](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/2a0a2f9339cbd3cf8b05ed96e91f31940c7bcd56))
+* **smw:** count only the rows a property sort returns ([4ed67a5](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/4ed67a5f49745bc8c36df3d0f956b3d0b7423e98))
+
+
+### Miscellaneous Chores
+
+* let agents start their own dev environment with mwenv ([be50261](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/commit/be50261b319f8abd7844d9a8651d4315df832765))
+
 ## [0.7.0](https://github.com/StarCitizenTools/mediawiki-extensions-AGGrid/compare/v0.6.1...v0.7.0) (2026-09-23)
 
 
