@@ -61,9 +61,10 @@ abstract class AbstractBackendDataSource implements BackendDataSource {
 			$rows[] = $this->mapRow( $rawRow, $spec );
 		}
 
-		// The total mirrors the same filter + quick search (not the page's offset/limit),
-		// so the client's pagination bar matches the rows actually returned.
-		$total = $this->countTotal( $spec, $filterModel, $quickSearch );
+		// The total mirrors the same sort, filter and quick search (not the page's
+		// offset/limit), so the client's pagination bar matches the rows actually
+		// returned.
+		$total = $this->countTotal( $spec, $sortModel, $filterModel, $quickSearch );
 
 		return new GridPage( $rows, $total );
 	}
@@ -173,9 +174,18 @@ abstract class AbstractBackendDataSource implements BackendDataSource {
 
 	/**
 	 * The total number of rows matching the spec query plus the active filter and quick
-	 * search, independent of the current page's offset/limit/sort.
+	 * search, independent of the current page's offset/limit.
+	 *
+	 * The effective sort is passed because a backend's sort can narrow the row set: an
+	 * SMW property sort drops pages with no value for that property. Backends whose
+	 * sort only orders rows ignore it.
 	 */
-	abstract protected function countTotal( array $spec, array $filterModel, string $quickSearch ): int;
+	abstract protected function countTotal(
+		array $spec,
+		array $sortModel,
+		array $filterModel,
+		string $quickSearch
+	): int;
 
 	/**
 	 * Map one raw backend row to an AG Grid row keyed by colId.

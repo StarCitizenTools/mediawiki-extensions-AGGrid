@@ -92,8 +92,15 @@ class BucketDataSource extends AbstractBackendDataSource {
 
 	/**
 	 * @inheritDoc
+	 *
+	 * A Bucket ORDER BY only orders rows, so the sort does not affect the count.
 	 */
-	protected function countTotal( array $spec, array $filterModel, string $quickSearch ): int {
+	protected function countTotal(
+		array $spec,
+		array $sortModel,
+		array $filterModel,
+		string $quickSearch
+	): int {
 		$selectOf = $this->selectResolver( $spec );
 		$familyOf = $this->familyResolver( $spec );
 		$filterOperands = $this->filterTranslator->toOperands( $filterModel, $selectOf, $familyOf );
