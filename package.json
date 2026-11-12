@@ -16,7 +16,7 @@
 		"@wikimedia/types-wikimedia": "0.7.0",
 		"eslint": "9.39.5",
 		"eslint-config-wikimedia": "0.33.1",
-		"eslint-plugin-no-jquery": "6.0.0",
+		"eslint-plugin-no-jquery": "6.0.2",
 		"grunt-banana-checker": "0.13.0",
 		"jsdom": "^30.1.2",
 		"stylelint-config-recess-order": "7.8.0",
