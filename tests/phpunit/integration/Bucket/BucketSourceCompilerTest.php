@@ -181,6 +181,22 @@ class BucketSourceCompilerTest extends MediaWikiIntegrationTestCase {
 		$this->assertSame( [ 'field' => 'value', 'direction' => 'DESC' ], $spec['orderBy'] );
 	}
 
+	public function testOrderByMarksItsColumnSorted(): void {
+		[ $columnDefs ] = $this->compiler->compile( [
+			'bucket' => 'item',
+			'fields' => [ 'page_name', 'skill.category' ],
+			'join' => $this->joinSpec(),
+			'orderBy' => [ 'field' => 'skill.category', 'direction' => 'DESC' ],
+		] );
+		$this->assertArrayNotHasKey( 'sort', $columnDefs[0] );
+		$this->assertSame( 'skill__category', $columnDefs[1]['field'] );
+		$this->assertSame(
+			'desc',
+			$columnDefs[1]['sort'],
+			'the colDef carries the default so AG Grid shows it and sends it'
+		);
+	}
+
 	public function testOrderByMustBeSelectedThrows(): void {
 		$this->expectException( LuaError::class );
 		$this->expectExceptionMessage(

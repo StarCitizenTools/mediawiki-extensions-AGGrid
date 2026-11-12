@@ -218,6 +218,7 @@ class LuaLibrarySourceTest extends MediaWikiIntegrationTestCase {
 				'orderBy' => [ 'field' => 'Pop', 'direction' => 'DESC' ],
 			],
 		] );
+		$this->assertCount( 1, $result );
 
 		$spec = $parser->getOutput()->getExtensionData( GridRenderer::SOURCE_EXT_DATA_KEY . '0' )['spec'];
 		$this->assertSame(
@@ -226,6 +227,14 @@ class LuaLibrarySourceTest extends MediaWikiIntegrationTestCase {
 			'the default sort rides in the stored query spec, alias field included'
 		);
 		$this->assertSame( [ 'Pop' => 'Has population' ], $spec['fields'] );
+
+		$columnDefs = $this->viewConfigFromPlaceholder( $parser, $result[0] )['columnDefs'];
+		$this->assertSame( 'Pop', $columnDefs[1]['field'] );
+		$this->assertSame(
+			'desc',
+			$columnDefs[1]['sort'],
+			'the placeholder colDef carries the default sort for the client'
+		);
 	}
 
 	public function testOrderByInvalidFieldThrows(): void {

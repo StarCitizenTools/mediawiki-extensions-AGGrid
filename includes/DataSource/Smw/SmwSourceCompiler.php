@@ -101,14 +101,17 @@ class SmwSourceCompiler {
 			] );
 		}
 
-		// Default sort, mirroring Bucket's orderBy: stored in the spec, applied while
-		// the client sends no sortModel. PHP turns numeric-string array keys into ints,
-		// so the labels are cast back for the strict match.
+		// Default sort, mirroring Bucket's orderBy: marked on its column for the client
+		// and stored in the spec for requests without a sort. PHP turns numeric-string
+		// array keys into ints, so the labels are cast back for the strict match.
 		$sortableFields = array_map( 'strval', array_keys( $fieldToProp ) );
 		if ( $hasSubjectColumn ) {
 			$sortableFields[] = '_subject';
 		}
 		$orderBy = $this->parseOrderBy( $source['orderBy'] ?? null, $sortableFields, 'declared' );
+		if ( $orderBy !== null ) {
+			$columnDefs = $this->markDefaultSort( $columnDefs, $orderBy['field'], $orderBy['direction'] );
+		}
 
 		$spec = [
 			'query' => $queryString,
