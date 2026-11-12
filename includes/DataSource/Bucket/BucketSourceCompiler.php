@@ -53,7 +53,7 @@ class BucketSourceCompiler {
 
 		[ $columnDefs, $selects, $fields ] = $this->parseFields( $source['fields'] ?? null, $bucket, $schemas );
 		$where = $this->parseWhere( $source['where'] ?? null, $bucket, $schemas );
-		$orderBy = $this->parseOrderBy( $source['orderBy'] ?? null, $selects );
+		$orderBy = $this->parseOrderBy( $source['orderBy'] ?? null, $selects, 'selected' );
 
 		$spec = [
 			'bucket' => $bucket,
@@ -300,35 +300,6 @@ class BucketSourceCompiler {
 			$parsed[] = [ $field, $op, $value ];
 		}
 		return $parsed;
-	}
-
-	/**
-	 * Parse the optional `orderBy` into a { field, direction } spec. The field must be
-	 * one of the selected fields (Bucket requires the sort field to be selected).
-	 *
-	 * @param mixed $orderBy
-	 * @param string[] $selects
-	 * @return array{field: string, direction: string}|null
-	 * @throws LuaError
-	 */
-	private function parseOrderBy( $orderBy, array $selects ): ?array {
-		if ( $orderBy === null ) {
-			return null;
-		}
-		if ( !is_array( $orderBy ) || !isset( $orderBy['field'] ) || !is_string( $orderBy['field'] ) ) {
-			$this->fail( 'source.orderBy must be { field, direction }' );
-		}
-		$field = trim( $orderBy['field'] );
-		if ( !in_array( $field, $selects, true ) ) {
-			$this->fail( 'orderBy field "' . $field . '" must be one of the selected fields' );
-		}
-		$direction = isset( $orderBy['direction'] ) && is_string( $orderBy['direction'] )
-			? strtoupper( trim( $orderBy['direction'] ) )
-			: 'ASC';
-		if ( $direction !== 'ASC' && $direction !== 'DESC' ) {
-			$this->fail( 'orderBy direction must be ASC or DESC' );
-		}
-		return [ 'field' => $field, 'direction' => $direction ];
 	}
 
 	/**

@@ -12,9 +12,10 @@ use MediaWiki\Extension\Scribunto\Engines\LuaCommon\LuaError;
  *
  * Covers the idioms both compilers duplicate verbatim: harvesting the display-only
  * presentation keys an author may set on a column, merging them over a derived
- * columnDef, and raising a parse-time author error with the shared message prefix.
- * Backend-specific concerns (SMW's filterProp facet and _subject column, Bucket's
- * filter override and join/where/orderBy parsing) stay in the compilers.
+ * columnDef, parsing the default sort (`orderBy`), and raising a parse-time author
+ * error with the shared message prefix. Backend-specific concerns (SMW's filterProp
+ * facet and _subject column, Bucket's filter override and join/where parsing) stay in
+ * the compilers.
  */
 trait SourceCompilerSupport {
 
@@ -63,6 +64,37 @@ trait SourceCompilerSupport {
 			$colDef['format'] = $opts['format'];
 		}
 		return $colDef;
+	}
+
+	/**
+	 * Validate an `orderBy` descriptor into a stored spec entry, or null when absent.
+	 * The field must be one of $allowed; the direction is 'ASC' (default) or 'DESC'.
+	 * It feeds the stored query spec, so parse time is the only author-feedback point.
+	 *
+	 * @param mixed $orderBy The `source.orderBy` value; null when absent.
+	 * @param string[] $allowed Field names the sort may name.
+	 * @param string $noun How the error describes $allowed ('declared', 'selected').
+	 * @return array{field: string, direction: string}|null
+	 * @throws LuaError If the descriptor is invalid.
+	 */
+	protected function parseOrderBy( mixed $orderBy, array $allowed, string $noun ): ?array {
+		if ( $orderBy === null ) {
+			return null;
+		}
+		if ( !is_array( $orderBy ) || !isset( $orderBy['field'] ) || !is_string( $orderBy['field'] ) ) {
+			$this->fail( 'source.orderBy must be { field, direction }' );
+		}
+		$field = trim( $orderBy['field'] );
+		if ( !in_array( $field, $allowed, true ) ) {
+			$this->fail( 'orderBy field "' . $field . '" must be one of the ' . $noun . ' fields' );
+		}
+		$direction = isset( $orderBy['direction'] ) && is_string( $orderBy['direction'] )
+			? strtoupper( trim( $orderBy['direction'] ) )
+			: 'ASC';
+		if ( $direction !== 'ASC' && $direction !== 'DESC' ) {
+			$this->fail( 'orderBy direction must be ASC or DESC' );
+		}
+		return [ 'field' => $field, 'direction' => $direction ];
 	}
 
 	/**

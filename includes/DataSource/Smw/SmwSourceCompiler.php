@@ -87,7 +87,8 @@ class SmwSourceCompiler {
 		// Subject (page) column, prepended unless mainlabel suppresses it ('-').
 		$mainlabel = $source['mainlabel'] ?? null;
 		$mainlabelIsString = is_string( $mainlabel );
-		if ( !$mainlabelIsString || $mainlabel !== '-' ) {
+		$hasSubjectColumn = !$mainlabelIsString || $mainlabel !== '-';
+		if ( $hasSubjectColumn ) {
 			$header = ( $mainlabelIsString && trim( $mainlabel ) !== '' && $mainlabel !== '-' )
 				? $mainlabel
 				: 'Page';
@@ -102,12 +103,11 @@ class SmwSourceCompiler {
 
 		// Default sort, mirroring Bucket's orderBy: stored in the spec, applied while
 		// the client sends no sortModel.
-		$hasSubjectColumn = !$mainlabelIsString || $mainlabel !== '-';
-		$orderBy = $this->parseOrderBy(
-			$source['orderBy'] ?? null,
-			array_keys( $fieldToProp ),
-			$hasSubjectColumn
-		);
+		$sortableFields = array_keys( $fieldToProp );
+		if ( $hasSubjectColumn ) {
+			$sortableFields[] = '_subject';
+		}
+		$orderBy = $this->parseOrderBy( $source['orderBy'] ?? null, $sortableFields, 'declared' );
 
 		$spec = [
 			'query' => $queryString,
@@ -221,41 +221,6 @@ class SmwSourceCompiler {
 		}
 
 		return $parsed;
-	}
-
-	/**
-	 * Validate the orderBy descriptor into a stored spec entry, or null when absent.
-	 * Mirrors Bucket's: the field must name a declared column ('_subject' names the
-	 * subject column), the direction is 'ASC' (default) or 'DESC'. Feeds the stored
-	 * query spec, so parse time is the only author-feedback point.
-	 *
-	 * @param mixed $orderBy
-	 * @param string[] $fields Declared column fields (printout labels/aliases).
-	 * @param bool $hasSubjectColumn Whether the subject ('_subject') column exists.
-	 * @return array{field: string, direction: string}|null
-	 * @throws LuaError If the descriptor is invalid.
-	 */
-	private function parseOrderBy( $orderBy, array $fields, bool $hasSubjectColumn ): ?array {
-		if ( $orderBy === null ) {
-			return null;
-		}
-		if ( !is_array( $orderBy ) || !isset( $orderBy['field'] ) || !is_string( $orderBy['field'] ) ) {
-			$this->fail( 'source.orderBy must be { field, direction }' );
-		}
-		$field = trim( $orderBy['field'] );
-		if ( $hasSubjectColumn ) {
-			$fields[] = '_subject';
-		}
-		if ( !in_array( $field, $fields, true ) ) {
-			$this->fail( 'orderBy field "' . $field . '" must be one of the declared fields' );
-		}
-		$direction = isset( $orderBy['direction'] ) && is_string( $orderBy['direction'] )
-			? strtoupper( trim( $orderBy['direction'] ) )
-			: 'ASC';
-		if ( $direction !== 'ASC' && $direction !== 'DESC' ) {
-			$this->fail( 'orderBy direction must be ASC or DESC' );
-		}
-		return [ 'field' => $field, 'direction' => $direction ];
 	}
 
 	/**
