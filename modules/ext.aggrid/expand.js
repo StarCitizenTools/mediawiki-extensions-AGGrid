@@ -102,9 +102,6 @@ function getOverlayRoot() {
 	}
 	let target = null;
 	try {
-		// A ResourceLoader module, declared in extension.json's dependencies — there
-		// is no file on disk for the resolver to find.
-		/* eslint-disable-next-line n/no-missing-require */
 		target = require( 'mediawiki.page.ready' ).teleportTarget;
 	} catch ( e ) {
 		// No core overlay container available; document.body is the fallback.
