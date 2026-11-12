@@ -160,6 +160,50 @@ class SmwSourceCompilerTest extends MediaWikiIntegrationTestCase {
 		}
 	}
 
+	public function testOrderByAcceptsNumericLabel(): void {
+		// PHP stores the '2020' label as an int array key; the field match must not
+		// reject it on type.
+		[ , $spec ] = $this->compiler->compile( [
+			'query' => '[[Category:City]]',
+			'printouts' => [ 'Has population=2020' ],
+			'orderBy' => [ 'field' => '2020', 'direction' => 'DESC' ],
+		] );
+		$this->assertSame( [ 'field' => '2020', 'direction' => 'DESC' ], $spec['orderBy'] );
+	}
+
+	public function testOrderByNonStringDirectionThrows(): void {
+		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage( 'mw.ext.aggrid.render: orderBy direction must be ASC or DESC' );
+		$this->compiler->compile( [
+			'query' => '[[Category:City]]',
+			'printouts' => [ 'Has population' ],
+			'orderBy' => [ 'field' => 'Has population', 'direction' => true ],
+		] );
+	}
+
+	public function testOrderByUnknownKeyThrows(): void {
+		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage( 'mw.ext.aggrid.render: unknown orderBy key "dir"' );
+		$this->compiler->compile( [
+			'query' => '[[Category:City]]',
+			'printouts' => [ 'Has population' ],
+			'orderBy' => [ 'field' => 'Has population', 'dir' => 'DESC' ],
+		] );
+	}
+
+	public function testSubjectPrintoutLabelIsReserved(): void {
+		$this->expectException( LuaError::class );
+		$this->expectExceptionMessage(
+			'mw.ext.aggrid.render: printout label "_subject" is reserved for the page column'
+		);
+		$this->compiler->compile( [
+			'query' => '[[Category:City]]',
+			'printouts' => [ 'Has code=_subject' ],
+			'mainlabel' => '-',
+			'orderBy' => [ 'field' => '_subject' ],
+		] );
+	}
+
 	public function testOrderByOmittedKeepsSpecWithoutIt(): void {
 		[ , $spec ] = $this->compiler->compile( [
 			'query' => '[[Category:City]]',

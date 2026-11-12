@@ -102,8 +102,9 @@ class SmwSourceCompiler {
 		}
 
 		// Default sort, mirroring Bucket's orderBy: stored in the spec, applied while
-		// the client sends no sortModel.
-		$sortableFields = array_keys( $fieldToProp );
+		// the client sends no sortModel. PHP turns numeric-string array keys into ints,
+		// so the labels are cast back for the strict match.
+		$sortableFields = array_map( 'strval', array_keys( $fieldToProp ) );
 		if ( $hasSubjectColumn ) {
 			$sortableFields[] = '_subject';
 		}
@@ -171,7 +172,7 @@ class SmwSourceCompiler {
 	 * @param mixed $printouts
 	 * @return array<int, array{0: string, 1: string, 2: array}> Options bag keys:
 	 *   type?, cellRendererParams?, format? (display-only), filterProp? (feeds the spec)
-	 * @throws LuaError If empty or an entry lacks a property name.
+	 * @throws LuaError If empty, an entry lacks a property name, or a label is reserved.
 	 */
 	private function parsePrintouts( $printouts ): array {
 		if ( !is_array( $printouts ) || $printouts === [] ) {
@@ -216,6 +217,11 @@ class SmwSourceCompiler {
 			}
 			if ( $label === '' ) {
 				$label = $prop;
+			}
+			// '_subject' is the page column's row key, sort key and colId; a printout
+			// under that label would be shadowed by the page everywhere.
+			if ( $label === '_subject' ) {
+				$this->fail( 'printout label "_subject" is reserved for the page column' );
 			}
 			$parsed[] = [ $prop, $label, $options ];
 		}
