@@ -63,8 +63,10 @@ class AbstractBackendDataSourceTest extends MediaWikiUnitTestCase {
 				return ( $this->executeQueryFn )( $spec, $offset, $size, $sortModel, $filterModel, $quickSearch );
 			}
 
-			protected function countTotal( array $spec, array $filterModel, string $quickSearch ): int {
-				return ( $this->countTotalFn )( $spec, $filterModel, $quickSearch );
+			protected function countTotal(
+				array $spec, array $sortModel, array $filterModel, string $quickSearch
+			): int {
+				return ( $this->countTotalFn )( $spec, $sortModel, $filterModel, $quickSearch );
 			}
 
 			protected function mapRow( array $rawRow, array $spec ): array {
@@ -112,8 +114,10 @@ class AbstractBackendDataSourceTest extends MediaWikiUnitTestCase {
 			];
 			return [];
 		};
-		$src->countTotalFn = static function ( $spec, $filterModel, $quickSearch ) use ( &$seenCount ): int {
-			$seenCount = [ 'filterModel' => $filterModel, 'quickSearch' => $quickSearch ];
+		$src->countTotalFn = static function (
+			$spec, $sortModel, $filterModel, $quickSearch
+		) use ( &$seenCount ): int {
+			$seenCount = [ 'sortModel' => $sortModel, 'filterModel' => $filterModel, 'quickSearch' => $quickSearch ];
 			return 0;
 		};
 
@@ -126,7 +130,8 @@ class AbstractBackendDataSourceTest extends MediaWikiUnitTestCase {
 		$this->assertSame( [ [ 'colId' => 'a', 'sort' => 'asc' ] ], $seenExec['sortModel'] );
 		$this->assertSame( [ 'a' => [ 'x' => 1 ] ], $seenExec['filterModel'] );
 		$this->assertSame( 'dragon', $seenExec['quickSearch'] );
-		// countTotal gets the filter + quick search (so the total mirrors the rows), not paging.
+		// countTotal gets the sort, filter + quick search (so the total mirrors the rows), not paging.
+		$this->assertSame( [ [ 'colId' => 'a', 'sort' => 'asc' ] ], $seenCount['sortModel'] );
 		$this->assertSame( [ 'a' => [ 'x' => 1 ] ], $seenCount['filterModel'] );
 		$this->assertSame( 'dragon', $seenCount['quickSearch'] );
 	}
@@ -137,18 +142,21 @@ class AbstractBackendDataSourceTest extends MediaWikiUnitTestCase {
 			'orderBy' => [ 'field' => 'pop', 'direction' => 'DESC' ],
 		] ] );
 		$seenExec = null;
+		$seenCount = null;
 		$src->executeQueryFn = static function ( $spec, $offset, $size, $sortModel ) use ( &$seenExec ): array {
 			$seenExec = $sortModel;
 			return [];
 		};
+		$src->countTotalFn = static function ( $spec, $sortModel ) use ( &$seenCount ): int {
+			$seenCount = $sortModel;
+			return 0;
+		};
 
 		$src->getPage( 1, 0, 0, [], [], 25 );
 
-		$this->assertSame(
-			[ [ 'colId' => 'pop', 'sort' => 'desc' ] ],
-			$seenExec,
-			'the spec orderBy stands in for a missing sort'
-		);
+		$default = [ [ 'colId' => 'pop', 'sort' => 'desc' ] ];
+		$this->assertSame( $default, $seenExec, 'the spec orderBy stands in for a missing sort' );
+		$this->assertSame( $default, $seenCount, 'the count sees the same effective sort as the rows' );
 	}
 
 	public function testGetPageRequestSortReplacesSpecOrderBy(): void {

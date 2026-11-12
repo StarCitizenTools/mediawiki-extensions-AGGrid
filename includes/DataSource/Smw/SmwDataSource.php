@@ -137,10 +137,23 @@ class SmwDataSource extends AbstractBackendDataSource {
 	 * bounded by the query's limit, so we raise it to SMW's configured maximum
 	 * (smwgQMaxLimit/smwgQMaxInlineLimit) to report a realistic total. Wrapped in its own
 	 * withRaisedLimits() so its setDescription() prune sees the raised structural limits.
+	 *
+	 * The count carries the page query's sort keys: unless the wiki enables
+	 * SMW_QSORT_UNCONDITIONAL, SMW sorts on a property by requiring a value for it, so a
+	 * property sort drops the pages without one. The same keys make the count drop them
+	 * too, instead of reporting rows the pages never return.
 	 */
-	protected function countTotal( array $spec, array $filterModel, string $quickSearch ): int {
-		return $this->withRaisedLimits( function () use ( $spec, $filterModel, $quickSearch ): int {
+	protected function countTotal(
+		array $spec,
+		array $sortModel,
+		array $filterModel,
+		string $quickSearch
+	): int {
+		return $this->withRaisedLimits( function () use ( $spec, $sortModel, $filterModel, $quickSearch ): int {
 			$countQuery = $this->buildQuery( $spec, [] );
+			$countQuery->setSortKeys(
+				$this->filterTranslator->toSortKeys( $sortModel, $this->displayPropertyResolver( $spec ) )
+			);
 
 			// Mirror executeQuery exactly: AND the same column-filter and quick-search
 			// conditions so the reported total matches the rows actually returned.

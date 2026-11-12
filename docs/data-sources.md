@@ -96,6 +96,11 @@ The sort runs on the **server**, on the very first page fetch — unlike a clien
 `initialState.sortModel`, it cannot race the grid's initial load. A user sort replaces it
 for as long as it is active; clearing the sort falls back to it.
 
+> Like any sort on an SMW grid, sorting on a property lists only the pages that have a value
+> for it — SMW sorts that way unless the wiki adds `SMW_QSORT_UNCONDITIONAL` to
+> `$smwgQSortFeatures`. The reported total leaves those pages out too. To keep every page in
+> the default view, sort on a property every page sets, or on `'_subject'`.
+
 ```lua
 mw.ext.aggrid.render{
     source = {

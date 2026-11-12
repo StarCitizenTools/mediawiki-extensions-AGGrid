@@ -415,6 +415,31 @@ class SmwDataSourceTest extends MediaWikiIntegrationTestCase {
 		);
 	}
 
+	public function testGetPageCountQueryCarriesTheEffectiveSort(): void {
+		$spec = [
+			'query' => '[[Category:City]]',
+			'printouts' => [ 'Has population=Pop' ],
+			'mainlabel' => null,
+			'fields' => [ 'Pop' => 'Has population' ],
+			'orderBy' => [ 'field' => 'Pop', 'direction' => 'DESC' ],
+		];
+		$captured = null;
+		$all = null;
+		$source = $this->newDataSource( $this->queryResult( [] ), $spec, $captured, 50, $all );
+
+		$source->getPage( self::PAGE_ID, 0, 0, [], [], 25 );
+
+		$this->assertCount( 2, $all, 'one page query, one count query' );
+		$this->assertSame( Query::MODE_COUNT, $all[1]->getQueryMode() );
+		// SMW sorts on a property by requiring a value for it; the count must carry the
+		// same keys so it drops the same pages the page query drops.
+		$this->assertSame(
+			[ 'Has_population' => 'DESC', '' => 'ASC' ],
+			$all[1]->getSortKeys(),
+			'the count query sorts like the page query'
+		);
+	}
+
 	public function testGetPageResolvesAliasedColumnFilterToRealProperty(): void {
 		$spec = [
 			'query' => '[[Category:City]]',
